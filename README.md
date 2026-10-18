@@ -1,4 +1,4 @@
-# Liar's Dice (and soon Liar's Poker)
+# Liar's Dice & Liar's Poker
 
 Private-room multiplayer over WebSockets. Node + TypeScript + Socket.IO server, React + Vite client.
 
@@ -36,8 +36,15 @@ src/client/                     React UI (Home → Lobby → Table)
 - **Timers live on the server.** Turn timeout auto-plays (`timeoutAction`: open with 1×2 or call). If the room has no
   timer, a disconnected player still gets 60s. Abandoned rooms are removed after 10 minutes.
 
-## Adding Liar's Poker
+## Games
 
-Implement `GameEngine` in `src/shared/games/liarsPoker.ts` (deal N cards, bid poker hands over the combined pool,
-loser gets +1 card, out past the max), add its config/action schemas to `protocol.ts`, pick the engine by room
-game type in `rooms.ts`, and add a `PokerTable` component.
+The host picks the game per room in the lobby; `rooms.ts` routes to the engine in `ENGINES` and validates moves
+with that game's schema from `ACTION_SCHEMAS`.
+
+- **Liar's Dice** (`liarsDice.ts`): bid quantity × face across all dice; options for wild 1s and "spot on".
+- **Liar's Poker** (`liarsPoker.ts`, card version): bid a poker hand that exists in everyone's cards combined.
+  Raises must be strictly higher (category, then ranks, then suit ♣<♦<♥<♠). Loser of a call is dealt one more
+  card next round and is out past the max.
+
+To add another game: implement `GameEngine`, add its config/action schemas to `protocol.ts`, register it in
+`ENGINES`, and add a table component routed from `App.tsx`.

@@ -14,6 +14,8 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: string }
  */
 export interface GameEngine<State, Action, Config, View> {
   defaultConfig: Config
+  /** Reason the game can't start with this many players / config, if any. */
+  canStart?(playerCount: number, config: Config): string | null
   init(playerIds: PlayerId[], config: Config, rng: Rng): State
   /** Apply a player's action, or explain why it's illegal. */
   apply(state: State, playerId: PlayerId, action: Action, rng: Rng): Result<State>

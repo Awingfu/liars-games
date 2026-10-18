@@ -63,6 +63,9 @@ button.danger { background: var(--danger); border-color: var(--danger); font-wei
 .lobby .actions, .controls .actions { display: flex; gap: 10px; justify-content: flex-end; }
 .lobby .actions .primary { flex: 1; max-width: 240px; }
 
+.segmented { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.segmented button.selected { border-color: var(--accent); background: #f0c24b22; font-weight: 600; }
+
 /* table */
 .table-head { display: flex; justify-content: space-between; align-items: center; color: var(--muted); margin-bottom: 12px; }
 .seats { list-style: none; padding: 0; margin: 0 0 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -106,4 +109,27 @@ button.danger { background: var(--danger); border-color: var(--danger); font-wei
   .settings { grid-template-columns: 1fr; }
   .die { font-size: 2.2rem; }
   .face { font-size: 1.6rem; }
+}
+
+/* poker */
+.card-back { width: 12px; height: 16px; border-radius: 2px; background: repeating-linear-gradient(45deg, #c9473d 0 3px, #a8352d 3px 6px); border: 1px solid #f5d0cb; }
+.card-face {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 60px; padding: 0 6px;
+  background: #fbfaf5; color: #1a1a1a; border-radius: 6px; font-weight: 700; font-size: 1.1rem; border: 2px solid transparent;
+}
+.card-face.red { color: #c62828; }
+.card-face.hit { border-color: var(--accent); box-shadow: 0 0 0 2px #f0c24b66; }
+.reveal .card-face { min-width: 36px; height: 48px; font-size: 0.95rem; }
+.hand-types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+.hand-types button { padding: 8px 4px; font-size: 0.85rem; }
+.hand-types button.selected, .rank-row button.selected, .suit-row button.selected { border-color: var(--accent); background: #f0c24b22; }
+.field { margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+.rank-row { display: grid; grid-template-columns: repeat(13, 1fr); gap: 4px; }
+.rank-row button { padding: 8px 0; font-size: 0.9rem; }
+.suit-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.suit-row button { font-size: 1.4rem; padding: 4px 0; }
+.suit-row button.red { color: #ff7b72; }
+@media (max-width: 560px) {
+  .rank-row { grid-template-columns: repeat(7, 1fr); }
+  .hand-types { grid-template-columns: repeat(2, 1fr); }
 }

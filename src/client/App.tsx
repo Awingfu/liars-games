@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ClientMsg, RoomSettings, RoomView, StateMsg } from '../shared/protocol'
+import { GAME_NAMES, GAME_TYPES, type ClientMsg, type RoomSettings, type RoomView, type StateMsg } from '../shared/protocol'
 import { DiceTable } from './DiceTable'
+import { PokerTable } from './PokerTable'
 import { send, useServerState } from './socket'
 
 export type Run = (msg: ClientMsg) => Promise<boolean>
@@ -39,7 +40,7 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>Liar's Dice</h1>
+        <h1>{state?.room ? GAME_NAMES[state.game?.game ?? state.room.settings.game] : "Liar's Dice & Poker"}</h1>
         {!connected && <span className="badge warn">Reconnecting…</span>}
       </header>
       {!state ? (
@@ -48,6 +49,8 @@ export function App() {
         <Home run={run} />
       ) : state.room.status === 'lobby' ? (
         <Lobby state={state} room={state.room} run={run} />
+      ) : state.game?.game === 'poker' ? (
+        <PokerTable state={state} room={state.room} run={run} />
       ) : (
         <DiceTable state={state} room={state.room} run={run} />
       )}
@@ -103,11 +106,9 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
   const link = `${location.origin}/?room=${room.code}`
   const [copied, setCopied] = useState(false)
 
-  const update = (patch: Partial<RoomSettings['game']> & { turnSeconds?: number }) => {
-    const { turnSeconds = room.settings.turnSeconds, ...game } = patch
-    run({ t: 'room:settings', settings: { turnSeconds, game: { ...room.settings.game, ...game } } })
-  }
-  const g = room.settings.game
+  const update = (patch: Partial<RoomSettings>) => run({ t: 'room:settings', settings: { ...room.settings, ...patch } })
+  const { dice, poker } = room.settings
+  const clamp = (v: string, lo: number, hi: number) => Math.max(lo, Math.min(hi, Number(v) || lo))
 
   return (
     <div className="lobby">
@@ -143,29 +144,60 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
       <div className="card">
         <h2>Settings</h2>
         <fieldset disabled={!isHost} className="settings">
-          <label>
-            Starting dice
-            <input
-              type="number" min={1} max={10} value={g.startingDice}
-              onChange={(e) => update({ startingDice: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })}
-            />
-          </label>
-          <label>
-            Turn timer
-            <select value={room.settings.turnSeconds} onChange={(e) => update({ turnSeconds: Number(e.target.value) })}>
-              {[0, 20, 30, 45, 60, 90].map((s) => (
-                <option key={s} value={s}>{s ? `${s}s` : 'Off'}</option>
-              ))}
-            </select>
-          </label>
-          <label className="check">
-            <input type="checkbox" checked={g.onesWild} onChange={(e) => update({ onesWild: e.target.checked })} />
-            1s are wild
-          </label>
-          <label className="check">
-            <input type="checkbox" checked={g.spotOn} onChange={(e) => update({ spotOn: e.target.checked })} />
-            Allow "spot on" calls
-          </label>
+          <div className="segmented" role="radiogroup" aria-label="Game">
+            {GAME_TYPES.map((t) => (
+              <button
+                key={t} type="button" role="radio" aria-checked={room.settings.game === t}
+                className={room.settings.game === t ? 'selected' : ''}
+                onClick={() => update({ game: t })}
+              >
+                {GAME_NAMES[t]}
+              </button>
+            ))}
+          </div>
+          {room.settings.game === 'dice' ? (
+            <>
+              <label>
+                Starting dice
+                <input
+                  type="number" min={1} max={10} value={dice.startingDice}
+                  onChange={(e) => update({ dice: { ...dice, startingDice: clamp(e.target.value, 1, 10) } })}
+                />
+              </label>
+              <TimerSelect value={room.settings.turnSeconds} onChange={(turnSeconds) => update({ turnSeconds })} />
+              <label className="check">
+                <input type="checkbox" checked={dice.onesWild} onChange={(e) => update({ dice: { ...dice, onesWild: e.target.checked } })} />
+                1s are wild
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={dice.spotOn} onChange={(e) => update({ dice: { ...dice, spotOn: e.target.checked } })} />
+                Allow "spot on" calls
+              </label>
+            </>
+          ) : (
+            <>
+              <label>
+                Starting cards
+                <input
+                  type="number" min={1} max={poker.maxCards} value={poker.startingCards}
+                  onChange={(e) => update({ poker: { ...poker, startingCards: clamp(e.target.value, 1, poker.maxCards) } })}
+                />
+              </label>
+              <label>
+                Out after
+                <select
+                  value={poker.maxCards}
+                  onChange={(e) => {
+                    const maxCards = Number(e.target.value)
+                    update({ poker: { maxCards, startingCards: Math.min(poker.startingCards, maxCards) } })
+                  }}
+                >
+                  {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>more than {n} cards</option>)}
+                </select>
+              </label>
+              <TimerSelect value={room.settings.turnSeconds} onChange={(turnSeconds) => update({ turnSeconds })} />
+            </>
+          )}
         </fieldset>
         {!isHost && <p className="muted small">Only the host can change settings.</p>}
       </div>
@@ -183,5 +215,18 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
         )}
       </div>
     </div>
+  )
+}
+
+function TimerSelect({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <label>
+      Turn timer
+      <select value={value} onChange={(e) => onChange(Number(e.target.value))}>
+        {[0, 20, 30, 45, 60, 90].map((s) => (
+          <option key={s} value={s}>{s ? `${s}s` : 'Off'}</option>
+        ))}
+      </select>
+    </label>
   )
 }

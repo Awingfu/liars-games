@@ -224,9 +224,8 @@ function deal(players: PokerPlayer[], rng: Rng): PokerPlayer[] {
 
 const err = (error: string): Result<PokerState> => ({ ok: false, error })
 
-export const liarsPoker: GameEngine<PokerState, PokerAction, PokerConfig, PokerView> & {
-  canStart(playerCount: number, config: PokerConfig): string | null
-} = {
+export const liarsPoker: GameEngine<PokerState, PokerAction, PokerConfig, PokerView> &
+  Required<Pick<GameEngine<PokerState, PokerAction, PokerConfig, PokerView>, 'canStart'>> = {
   defaultConfig: { startingCards: 1, maxCards: 5 },
 
   canStart(playerCount, { startingCards, maxCards }) {

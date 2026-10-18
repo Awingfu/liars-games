@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { isLegalRaise, type Bid, type DiceView, type RoundResult } from '../shared/games/liarsDice'
 import type { RoomView, StateMsg } from '../shared/protocol'
 import type { Run } from './App'
+import { Countdown } from './common'
 
 const FACE_CHARS = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
 
@@ -21,16 +22,6 @@ function minRaise(bid: Bid | null, onesWild: boolean, total: number): Bid | null
   for (let qty = 1; qty <= total; qty++)
     for (let face = 1; face <= 6; face++) if (isLegalRaise(bid, { qty, face }, onesWild)) return { qty, face }
   return null
-}
-
-function Countdown({ deadline }: { deadline: number }) {
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 250)
-    return () => clearInterval(t)
-  }, [])
-  const s = Math.max(0, Math.ceil((deadline - now) / 1000))
-  return <span className={`timer${s <= 5 ? ' urgent' : ''}`}>{s}s</span>
 }
 
 export function DiceTable({ state, room, run }: { state: StateMsg; room: RoomView; run: Run }) {

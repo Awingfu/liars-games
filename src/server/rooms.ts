@@ -1,13 +1,21 @@
 import { randomInt } from 'node:crypto'
-import type { PlayerId, Rng } from '../shared/engine'
-import { liarsDice as engine, type DiceAction, type DiceState } from '../shared/games/liarsDice'
+import type { GameEngine, PlayerId, Rng } from '../shared/engine'
+import { liarsDice } from '../shared/games/liarsDice'
+import { liarsPoker } from '../shared/games/liarsPoker'
 import {
+  ACTION_SCHEMAS,
   DEFAULT_SETTINGS,
   MAX_PLAYERS,
+  type GameType,
   type RoomSettings,
   type RoomView,
   type StateMsg,
 } from '../shared/protocol'
+
+/** Rooms hold opaque engine state; each engine only ever sees its own. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyEngine = GameEngine<any, any, any, NonNullable<StateMsg['game']>>
+const ENGINES: Record<GameType, AnyEngine> = { dice: liarsDice, poker: liarsPoker }
 
 const REVEAL_MS = 5000
 /** Turn limit used for a disconnected player when the room has no timer. */
@@ -30,7 +38,9 @@ interface Room {
   status: 'lobby' | 'playing'
   players: RoomPlayer[]
   settings: RoomSettings
-  state: DiceState | null
+  /** Game type of `state`, fixed when the game starts. */
+  playing: GameType | null
+  state: unknown
   turnDeadline: number | null
   timer: NodeJS.Timeout | null
   emptySince: number | null
@@ -70,7 +80,7 @@ export class RoomManager {
       settings: room.settings,
       turnDeadline: room.turnDeadline,
     }
-    return { you: playerId, room: view, game: room.state ? engine.viewFor(room.state, playerId) : null }
+    return { you: playerId, room: view, game: room.state ? this.engine(room).viewFor(room.state, playerId) : null }
   }
 
   // ---- lobby ----
@@ -86,6 +96,7 @@ export class RoomManager {
       status: 'lobby',
       players: [{ id: playerId, name, connected: true, ready: false, left: false }],
       settings: structuredClone(DEFAULT_SETTINGS),
+      playing: null,
       state: null,
       turnDeadline: null,
       timer: null,
@@ -123,7 +134,7 @@ export class RoomManager {
       const p = room.players.find((p) => p.id === playerId)!
       p.left = true
       p.connected = false
-      room.state = engine.forfeit(room.state!, playerId)
+      room.state = this.engine(room).forfeit(room.state, playerId)
       this.schedule(room)
     }
     if (room.hostId === playerId) {
@@ -155,10 +166,16 @@ export class RoomManager {
     if (room.status !== 'lobby') fail('Game already started')
     if (room.players.length < 2) fail('Need at least 2 players')
     if (room.players.some((p) => p.id !== room.hostId && !p.ready)) fail('Everyone must be ready')
+    const game = room.settings.game
+    const engine = ENGINES[game]
+    const config = room.settings[game]
+    const problem = engine.canStart?.(room.players.length, config)
+    if (problem) fail(problem)
     room.status = 'playing'
+    room.playing = game
     room.state = engine.init(
       room.players.map((p) => p.id),
-      room.settings.game,
+      config,
       this.rng,
     )
     this.schedule(room)
@@ -167,9 +184,10 @@ export class RoomManager {
 
   backToLobby(playerId: PlayerId) {
     const room = this.hostRoom(playerId)
-    if (room.status !== 'playing' || room.state?.phase !== 'over') fail('Game is not over')
+    if (room.status !== 'playing' || !room.state || this.engine(room).phase(room.state) !== 'over') fail('Game is not over')
     this.clearTimer(room)
     room.status = 'lobby'
+    room.playing = null
     room.state = null
     room.players = room.players.filter((p) => !p.left)
     for (const p of room.players) p.ready = false
@@ -178,10 +196,12 @@ export class RoomManager {
 
   // ---- gameplay ----
 
-  act(playerId: PlayerId, action: DiceAction) {
+  act(playerId: PlayerId, rawAction: unknown) {
     const room = this.findRoom(playerId) ?? fail('Not in a room')
-    if (!room.state) fail('No game running')
-    const result = engine.apply(room.state, playerId, action, this.rng)
+    if (!room.state || !room.playing) fail('No game running')
+    const action = ACTION_SCHEMAS[room.playing].safeParse(rawAction)
+    if (!action.success) fail('Invalid move')
+    const result = this.engine(room).apply(room.state, playerId, action.data, this.rng)
     if (!result.ok) fail(result.error)
     room.state = result.value
     this.schedule(room)
@@ -199,7 +219,7 @@ export class RoomManager {
     if (room.players.every((p) => !p.connected)) room.emptySince ??= Date.now()
     else room.emptySince = null
     // Without a room timer, a disconnected player's turn still needs a limit.
-    if (room.state && room.settings.turnSeconds === 0 && engine.currentPlayer(room.state) === playerId)
+    if (room.state && room.settings.turnSeconds === 0 && this.engine(room).currentPlayer(room.state) === playerId)
       this.schedule(room)
     this.broadcast(room)
   }
@@ -217,6 +237,7 @@ export class RoomManager {
     this.clearTimer(room)
     const s = room.state
     if (!s) return
+    const engine = this.engine(room)
     const phase = engine.phase(s)
     if (phase === 'reveal') {
       room.timer = setTimeout(() => {
@@ -249,6 +270,10 @@ export class RoomManager {
     this.clearTimer(room)
     this.rooms.delete(room.code)
     for (const p of room.players) if (this.roomOf.get(p.id) === room.code) this.roomOf.delete(p.id)
+  }
+
+  private engine(room: Room): AnyEngine {
+    return ENGINES[room.playing ?? room.settings.game]
   }
 
   private findRoom(playerId: PlayerId) {
