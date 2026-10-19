@@ -51,6 +51,10 @@ function fail(msg: string): never {
   throw new RoomError(msg)
 }
 
+/** Names match ignoring case and extra whitespace ("Sam" = " sam " = "SAM"). */
+const sameName = (a: string, b: string) =>
+  a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase()
+
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' // no I/L/O/0/1
 
 export class RoomManager {
@@ -110,12 +114,14 @@ export class RoomManager {
   join(playerId: PlayerId, code: string, name: string) {
     const room = this.rooms.get(code) ?? fail('Room not found')
     const existing = room.players.find((p) => p.id === playerId && !p.left)
+    const nameTaken = room.players.some((p) => !p.left && p.id !== playerId && sameName(p.name, name))
     if (existing) {
       existing.connected = true
-      if (room.status === 'lobby') existing.name = name
+      if (room.status === 'lobby' && !nameTaken) existing.name = name
     } else {
       if (room.status !== 'lobby') fail('Game already in progress')
       if (room.players.length >= MAX_PLAYERS) fail('Room is full')
+      if (nameTaken) fail(`Someone in this room is already called "${name}". Pick another name.`)
       this.leave(playerId)
       room.players.push({ id: playerId, name, connected: true, ready: false, left: false })
       this.roomOf.set(playerId, code)
