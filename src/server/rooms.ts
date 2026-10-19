@@ -111,9 +111,20 @@ export class RoomManager {
     this.broadcast(room)
   }
 
-  join(playerId: PlayerId, code: string, name: string) {
+  /**
+   * Join a room. Returns the player id the caller now plays as: normally their
+   * own, but joining with the name of a disconnected seat reclaims that seat
+   * (e.g. after a phone browser dropped the tab), so the caller must switch ids.
+   */
+  join(playerId: PlayerId, code: string, name: string): PlayerId {
     const room = this.rooms.get(code) ?? fail('Room not found')
     const existing = room.players.find((p) => p.id === playerId && !p.left)
+    const awaySeat = !existing && room.players.find((p) => !p.left && !p.connected && sameName(p.name, name))
+    if (awaySeat) {
+      this.leave(playerId)
+      this.setConnected(awaySeat.id, true)
+      return awaySeat.id
+    }
     const nameTaken = room.players.some((p) => !p.left && p.id !== playerId && sameName(p.name, name))
     if (existing) {
       existing.connected = true
@@ -128,6 +139,7 @@ export class RoomManager {
     }
     room.emptySince = null
     this.broadcast(room)
+    return playerId
   }
 
   leave(playerId: PlayerId) {

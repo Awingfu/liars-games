@@ -41,10 +41,26 @@ io.use((socket, next) => {
   next()
 })
 
+/**
+ * Point a session at a different player (seat reclaim). Every socket on that
+ * token follows, and tokens of the abandoned session for `to` stop working.
+ */
+function switchPlayer(token: string, from: string, to: string) {
+  for (const [t, id] of sessions) if (id === to && t !== token) sessions.delete(t)
+  sessions.set(token, to)
+  io.in(playerRoom(from)).socketsJoin(playerRoom(to))
+  io.in(playerRoom(from)).socketsLeave(playerRoom(from))
+  socketCount.set(to, (socketCount.get(to) ?? 0) + (socketCount.get(from) ?? 0))
+  socketCount.delete(from)
+}
+
 io.on('connection', (socket) => {
-  const playerId: string = socket.data.playerId
+  const token: string = socket.data.token
+  // Resolve per message: a seat reclaim can change which player this session is.
+  const me = () => sessions.get(token) ?? socket.data.playerId
+  const playerId = me()
   socket.join(playerRoom(playerId))
-  socket.emit('session', { token: socket.data.token, playerId } satisfies SessionMsg)
+  socket.emit('session', { token, playerId } satisfies SessionMsg)
 
   socketCount.set(playerId, (socketCount.get(playerId) ?? 0) + 1)
   rooms.setConnected(playerId, true)
@@ -65,10 +81,19 @@ io.on('connection', (socket) => {
     const parsed = ClientMsg.safeParse(raw)
     if (!parsed.success) return reply({ ok: false, error: 'Bad message' })
     const msg = parsed.data
+    const playerId = me()
     try {
       switch (msg.t) {
         case 'room:create': rooms.create(playerId, msg.name); break
-        case 'room:join': rooms.join(playerId, msg.code, msg.name); break
+        case 'room:join': {
+          const seat = rooms.join(playerId, msg.code, msg.name)
+          if (seat !== playerId) {
+            switchPlayer(token, playerId, seat)
+            io.to(playerRoom(seat)).emit('session', { token, playerId: seat } satisfies SessionMsg)
+            io.to(playerRoom(seat)).emit('state', rooms.stateFor(seat))
+          }
+          break
+        }
         case 'room:leave': rooms.leave(playerId); break
         case 'room:settings': rooms.updateSettings(playerId, msg.settings); break
         case 'room:ready': rooms.setReady(playerId, msg.ready); break
@@ -85,6 +110,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on('disconnect', () => {
+    const playerId = me()
     const n = (socketCount.get(playerId) ?? 1) - 1
     if (n > 0) return void socketCount.set(playerId, n)
     socketCount.delete(playerId)

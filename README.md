@@ -41,6 +41,8 @@ src/client/                     React UI (Home → Lobby → Table)
   which only includes the viewer's own dice. All hands are revealed only via `lastResult` after a call.
 - **Full snapshots.** Each change sends every player their personalized `state` — tiny payloads, no desync.
 - **Reconnect.** The server issues a session token (kept in `sessionStorage`); reconnecting with it restores your seat.
+  Lost the tab entirely (new device, browser killed it)? Join again with the same name: a disconnected seat with
+  that name is handed back, hand and all. Names held by connected players are refused.
 - **Timers live on the server.** Turn timeout auto-plays (`timeoutAction`: open with 1×2 or call). If the room has no
   timer, a disconnected player still gets 60s. Abandoned rooms are removed after 10 minutes.
 
