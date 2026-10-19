@@ -41,7 +41,7 @@ interface Room {
   /** Game type of `state`, fixed when the game starts. */
   playing: GameType | null
   state: unknown
-  turnDeadline: number | null
+  deadline: number | null
   timer: NodeJS.Timeout | null
   emptySince: number | null
 }
@@ -82,7 +82,7 @@ export class RoomManager {
       status: room.status,
       players: room.players.map(({ id, name, connected, ready, left }) => ({ id, name, connected, ready, left })),
       settings: room.settings,
-      turnDeadline: room.turnDeadline,
+      deadline: room.deadline,
     }
     return { you: playerId, room: view, game: room.state ? this.engine(room).viewFor(room.state, playerId) : null }
   }
@@ -102,7 +102,7 @@ export class RoomManager {
       settings: structuredClone(DEFAULT_SETTINGS),
       playing: null,
       state: null,
-      turnDeadline: null,
+      deadline: null,
       timer: null,
       emptySince: null,
     }
@@ -258,6 +258,7 @@ export class RoomManager {
     const engine = this.engine(room)
     const phase = engine.phase(s)
     if (phase === 'reveal') {
+      room.deadline = Date.now() + REVEAL_MS
       room.timer = setTimeout(() => {
         room.state = engine.nextRound(room.state!, this.rng)
         this.schedule(room)
@@ -268,7 +269,7 @@ export class RoomManager {
       const connected = room.players.find((p) => p.id === current)?.connected
       const ms = room.settings.turnSeconds > 0 ? room.settings.turnSeconds * 1000 : connected ? 0 : DISCONNECTED_TURN_MS
       if (!ms) return
-      room.turnDeadline = Date.now() + ms
+      room.deadline = Date.now() + ms
       room.timer = setTimeout(() => {
         const r = engine.apply(room.state!, current, engine.timeoutAction(room.state!), this.rng)
         if (r.ok) room.state = r.value
@@ -281,7 +282,7 @@ export class RoomManager {
   private clearTimer(room: Room) {
     if (room.timer) clearTimeout(room.timer)
     room.timer = null
-    room.turnDeadline = null
+    room.deadline = null
   }
 
   private destroy(room: Room) {

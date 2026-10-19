@@ -90,8 +90,8 @@ export interface RoomView {
   status: 'lobby' | 'playing'
   players: RoomPlayerView[]
   settings: RoomSettings
-  /** Epoch ms when the current turn auto-plays, if a timer is running. */
-  turnDeadline: number | null
+  /** Epoch ms when the current turn auto-plays, or when the reveal pause ends and the next round deals. */
+  deadline: number | null
 }
 
 /** Server → client `state` event: everything this player is allowed to see. */

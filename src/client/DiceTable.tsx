@@ -72,12 +72,12 @@ export function DiceTable({ state, room, run }: { state: StateMsg; room: RoomVie
         {g.phase === 'bidding' && (
           <div className="turn-line">
             {myTurn ? <strong>Your turn</strong> : <>Waiting for {nameOf(g.turnPlayerId)}</>}
-            {room.turnDeadline && <> · <Countdown deadline={room.turnDeadline} /></>}
+            {room.deadline && <> · <Countdown deadline={room.deadline} /></>}
           </div>
         )}
       </div>
 
-      {g.lastResult && <Reveal result={g.lastResult} view={g} nameOf={nameOf} you={state.you} />}
+      {g.lastResult && <Reveal result={g.lastResult} view={g} nameOf={nameOf} you={state.you} deadline={room.deadline} />}
 
       {g.phase === 'over' && (
         <div className="card winner">
@@ -146,9 +146,9 @@ function BidControls({ view: g, run }: { view: DiceView; run: Run }) {
         </button>
         {g.bid && (
           <>
-            <button className="danger" title="The bid is too high: everyone reveals; if it's wrong the bidder loses a die, otherwise you do" onClick={() => run({ t: 'game:action', action: { type: 'call' } })}>Liar!</button>
+            <button className="danger" aria-label="Liar!" title="The bid is too high: everyone reveals; if it's wrong the bidder loses a die, otherwise you do" onClick={() => run({ t: 'game:action', action: { type: 'call' } })}>Liar!</button>
             {g.config.spotOn && (
-              <button title="The bid is exactly right: get a die back if so, lose one if not" onClick={() => run({ t: 'game:action', action: { type: 'spotOn' } })}>Spot on</button>
+              <button aria-label="Spot on" title="The bid is exactly right: get a die back if so, lose one if not" onClick={() => run({ t: 'game:action', action: { type: 'spotOn' } })}>Spot on</button>
             )}
           </>
         )}
@@ -163,7 +163,7 @@ function BidControls({ view: g, run }: { view: DiceView; run: Run }) {
   )
 }
 
-function Reveal({ result: r, view: g, nameOf, you }: { result: RoundResult; view: DiceView; nameOf: (id: string) => string; you: string }) {
+function Reveal({ result: r, view: g, nameOf, you, deadline }: { result: RoundResult; view: DiceView; nameOf: (id: string) => string; you: string; deadline: number | null }) {
   const who = (id: string) => (id === you ? 'You' : nameOf(id))
   const call = r.kind === 'call' ? 'called Liar' : 'called Spot on'
   const outcome = r.gainerId
@@ -186,7 +186,11 @@ function Reveal({ result: r, view: g, nameOf, you }: { result: RoundResult; view
           </li>
         ))}
       </ul>
-      {g.phase === 'reveal' && <p className="muted small">Next round starting…</p>}
+      {g.phase === 'reveal' && (
+        <p className="muted small">
+          {deadline ? <>Next round in <Countdown deadline={deadline} urgentAt={0} /></> : 'Next round starting…'}
+        </p>
+      )}
     </div>
   )
 }

@@ -139,12 +139,12 @@ export function PokerTable({ state, room, run }: { state: StateMsg; room: RoomVi
         {g.phase === 'bidding' && (
           <div className="turn-line">
             {myTurn ? <strong>Your turn</strong> : <>Waiting for {nameOf(g.turnPlayerId)}</>}
-            {room.turnDeadline && <> · <Countdown deadline={room.turnDeadline} /></>}
+            {room.deadline && <> · <Countdown deadline={room.deadline} /></>}
           </div>
         )}
       </div>
 
-      {g.lastResult && <Reveal result={g.lastResult} view={g} nameOf={nameOf} you={state.you} />}
+      {g.lastResult && <Reveal result={g.lastResult} view={g} nameOf={nameOf} you={state.you} deadline={room.deadline} />}
 
       {g.phase === 'over' && (
         <div className="card winner">
@@ -238,7 +238,7 @@ function ClaimPicker({ view: g, run }: { view: PokerView; run: Run }) {
   )
 }
 
-function Reveal({ result: r, view: g, nameOf, you }: { result: PokerRoundResult; view: PokerView; nameOf: (id: string) => string; you: string }) {
+function Reveal({ result: r, view: g, nameOf, you, deadline }: { result: PokerRoundResult; view: PokerView; nameOf: (id: string) => string; you: string; deadline: number | null }) {
   const who = (id: string) => (id === you ? 'You' : nameOf(id))
   const loser = who(r.loserId)
   const outcome = r.eliminatedId
@@ -259,7 +259,11 @@ function Reveal({ result: r, view: g, nameOf, you }: { result: PokerRoundResult;
           </li>
         ))}
       </ul>
-      {g.phase === 'reveal' && <p className="muted small">Next round starting…</p>}
+      {g.phase === 'reveal' && (
+        <p className="muted small">
+          {deadline ? <>Next round in <Countdown deadline={deadline} urgentAt={0} /></> : 'Next round starting…'}
+        </p>
+      )}
     </div>
   )
 }
