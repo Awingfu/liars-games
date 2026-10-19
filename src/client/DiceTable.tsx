@@ -146,13 +146,19 @@ function BidControls({ view: g, run }: { view: DiceView; run: Run }) {
         </button>
         {g.bid && (
           <>
-            <button className="danger" onClick={() => run({ t: 'game:action', action: { type: 'call' } })}>Liar!</button>
+            <button className="danger" title="The bid is too high: everyone reveals; if it's wrong the bidder loses a die, otherwise you do" onClick={() => run({ t: 'game:action', action: { type: 'call' } })}>Liar!</button>
             {g.config.spotOn && (
-              <button onClick={() => run({ t: 'game:action', action: { type: 'spotOn' } })}>Spot on</button>
+              <button title="The bid is exactly right: get a die back if so, lose one if not" onClick={() => run({ t: 'game:action', action: { type: 'spotOn' } })}>Spot on</button>
             )}
           </>
         )}
       </div>
+      {onesWild && (
+        <p className="hint table-hint">
+          1s are wild: they count toward every face except a bid on 1s. To bid 1s, use at least half the quantity
+          (rounded up). To leave 1s, double it plus one.
+        </p>
+      )}
     </div>
   )
 }

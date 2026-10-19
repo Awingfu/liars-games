@@ -56,6 +56,9 @@ button.danger { background: var(--danger); border-color: var(--danger); font-wei
 /* lobby */
 .room-code { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .room-code strong { font-size: 1.8rem; letter-spacing: 0.2em; color: var(--accent); }
+.option { grid-column: 1 / -1; }
+.hint { margin: 4px 0 0 26px; font-size: 0.82rem; line-height: 1.4; color: var(--muted); }
+.invite-link { width: 100%; font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
 .players { list-style: none; padding: 0; margin: 0; }
 .players li { display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); gap: 8px; }
 .players li.away { opacity: 0.55; }
@@ -133,3 +136,4 @@ button.danger { background: var(--danger); border-color: var(--danger); font-wei
   .rank-row { grid-template-columns: repeat(7, 1fr); }
   .hand-types { grid-template-columns: repeat(2, 1fr); }
 }
+.table-hint { margin: 10px 0 0; }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { GAME_NAMES, GAME_TYPES, type ClientMsg, type RoomSettings, type RoomView, type StateMsg } from '../shared/protocol'
 import { DiceTable } from './DiceTable'
 import { PokerTable } from './PokerTable'
+import { copyText } from './common'
 import { send, useServerState } from './socket'
 
 export type Run = (msg: ClientMsg) => Promise<boolean>
@@ -104,7 +105,8 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
   const me = room.players.find((p) => p.id === state.you)
   const canStart = room.players.length >= 2 && room.players.every((p) => p.id === room.hostId || p.ready)
   const link = `${location.origin}/?room=${room.code}`
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle')
+  const linkRef = useRef<HTMLInputElement>(null)
 
   const update = (patch: Partial<RoomSettings>) => run({ t: 'room:settings', settings: { ...room.settings, ...patch } })
   const { dice, poker } = room.settings
@@ -117,14 +119,24 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
           <span className="muted">Room code</span>
           <strong>{room.code}</strong>
           <button
-            onClick={() => {
-              navigator.clipboard?.writeText(link).then(() => setCopied(true), () => {})
-              setTimeout(() => setCopied(false), 1500)
+            onClick={async () => {
+              const ok = await copyText(link)
+              setCopied(ok ? 'ok' : 'fail')
+              if (!ok) linkRef.current?.select()
+              setTimeout(() => setCopied('idle'), 2000)
             }}
           >
-            {copied ? 'Copied!' : 'Copy invite link'}
+            {copied === 'ok' ? 'Copied!' : copied === 'fail' ? 'Copy it below ↓' : 'Copy invite link'}
           </button>
         </div>
+        <input
+          ref={linkRef}
+          className="invite-link"
+          readOnly
+          value={link}
+          aria-label="Invite link"
+          onFocus={(e) => e.currentTarget.select()}
+        />
         <ul className="players">
           {room.players.map((p) => (
             <li key={p.id} className={p.connected ? '' : 'away'}>
@@ -165,14 +177,28 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
                 />
               </label>
               <TimerSelect value={room.settings.turnSeconds} onChange={(turnSeconds) => update({ turnSeconds })} />
-              <label className="check">
-                <input type="checkbox" checked={dice.onesWild} onChange={(e) => update({ dice: { ...dice, onesWild: e.target.checked } })} />
-                1s are wild
-              </label>
-              <label className="check">
-                <input type="checkbox" checked={dice.spotOn} onChange={(e) => update({ dice: { ...dice, spotOn: e.target.checked } })} />
-                Allow "spot on" calls
-              </label>
+              <div className="option">
+                <label className="check">
+                  <input type="checkbox" checked={dice.onesWild} onChange={(e) => update({ dice: { ...dice, onesWild: e.target.checked } })} />
+                  1s are wild
+                </label>
+                <p className="hint">
+                  1s count toward every bid, so "five 4s" counts all 4s <em>and</em> all 1s. The only exception is a bid
+                  on 1s themselves, which counts just the 1s. You can't open on 1s. Switching to 1s needs at least half
+                  the current quantity (rounded up), e.g. 6×4s → 3×1s. Switching back needs double plus one, e.g. 3×1s → 7×anything.
+                </p>
+              </div>
+              <div className="option">
+                <label className="check">
+                  <input type="checkbox" checked={dice.spotOn} onChange={(e) => update({ dice: { ...dice, spotOn: e.target.checked } })} />
+                  Allow "spot on" calls
+                </label>
+                <p className="hint">
+                  On your turn, instead of calling Liar, you can claim the current bid is <em>exactly</em> right. If the
+                  count matches exactly, you get a die back (up to the starting number). If it's off in either direction,
+                  you lose a die.
+                </p>
+              </div>
             </>
           ) : (
             <>
