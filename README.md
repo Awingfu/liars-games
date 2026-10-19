@@ -15,6 +15,14 @@ Open http://localhost:5173 in two or more tabs (each tab is its own player), cre
 
 Production: `npm run build && npm start` serves the built client and sockets from one port (`PORT`, default 3001).
 
+## Deploy (Render)
+
+`render.yaml` defines a single free web service. In Render: **New → Blueprint**, pick this repo, apply.
+It builds with `npm ci && npm run build` and starts with `npm start`; Render supplies `PORT`.
+
+Notes on the free plan: the service sleeps after ~15 minutes without traffic (first visit then takes ~30–60s),
+and rooms live in memory, so a restart or redeploy ends games in progress.
+
 ## Layout
 
 ```

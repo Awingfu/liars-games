@@ -104,7 +104,7 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
   const isHost = room.hostId === state.you
   const me = room.players.find((p) => p.id === state.you)
   const canStart = room.players.length >= 2 && room.players.every((p) => p.id === room.hostId || p.ready)
-  const link = `${location.origin}/?room=${room.code}`
+  const link = `${location.origin}${location.pathname}?room=${room.code}`
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle')
   const linkRef = useRef<HTMLInputElement>(null)
 

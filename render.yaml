@@ -1,0 +1,10 @@
+# Render Blueprint: one web service serves the built client and the Socket.IO server.
+services:
+  - type: web
+    name: liars-games
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true

@@ -9,6 +9,7 @@ import { RoomError, RoomManager } from './rooms'
 const PORT = Number(process.env.PORT ?? 3001)
 
 const app = express()
+app.get('/healthz', (_req, res) => res.send('ok'))
 if (process.env.NODE_ENV === 'production') {
   const dist = path.resolve(import.meta.dirname, '../../dist')
   app.use(express.static(dist))
