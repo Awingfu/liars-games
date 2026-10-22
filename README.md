@@ -58,3 +58,17 @@ with that game's schema from `ACTION_SCHEMAS`.
 
 To add another game: implement `GameEngine`, add its config/action schemas to `protocol.ts`, register it in
 `ENGINES`, and add a table component routed from `App.tsx`.
+
+## TODO: more games
+
+- [ ] **Mia (Mäxchen)**: each player rolls two dice in secret and announces a result that must beat the last one
+  (truthfully or not). The next player either accepts and takes the cup, or calls "liar" and lifts it; whoever
+  is wrong loses a life. Ranking: 2-1 ("Mia") highest, then doubles (1-1 lowest, 6-6 highest), then the rest
+  read high-die-first as a number (6-5 = 65 down to 3-1 = 31). Needs a new engine, a "lives" setting, and a small
+  table UI.
+- [ ] **Dollar-bill Liar's Poker**: everyone holds 8 random digits (like a banknote serial number) and bids counts
+  of a digit across all players, e.g. "four 7s". Mechanically Liar's Dice with ten-sided dice and 8 per player,
+  so it can likely reuse `liarsDice.ts` with a faces/count setting.
+- [ ] **Cheat (BS / I Doubt It)**: players play cards face down claiming a rank ("two Queens"); anyone can call it.
+  If the claim was a lie the player picks up the pile, otherwise the caller does. First to empty their hand wins.
+  Reuses the deck and card rendering from Liar's Poker.
