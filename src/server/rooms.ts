@@ -3,6 +3,7 @@ import type { GameEngine, PlayerId, Rng } from '../shared/engine'
 import { liarsDice } from '../shared/games/liarsDice'
 import { diceBotAction } from '../shared/games/liarsDiceBot'
 import { liarsPoker } from '../shared/games/liarsPoker'
+import { pokerBotAction } from '../shared/games/liarsPokerBot'
 import {
   ACTION_SCHEMAS,
   DEFAULT_SETTINGS,
@@ -20,7 +21,7 @@ type AnyEngine = GameEngine<any, any, any, NonNullable<StateMsg['game']>>
 const ENGINES: Record<GameType, AnyEngine> = { dice: liarsDice, poker: liarsPoker }
 /** Bot players for each game, given the bot's own redacted view. Games without one can't have bots. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const BOTS: Partial<Record<GameType, (view: any, me: PlayerId, rng: Rng) => unknown>> = { dice: diceBotAction }
+const BOTS: Partial<Record<GameType, (view: any, me: PlayerId, rng: Rng) => unknown>> = { dice: diceBotAction, poker: pokerBotAction }
 
 /** How long a bot "thinks" before moving, so humans can follow along. */
 const BOT_DELAY_MS = [1200, 2400] as const

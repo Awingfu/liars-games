@@ -94,18 +94,18 @@ describe('RoomManager bots', () => {
     expect(() => rooms.removeBot('host', 'p2')).toThrow(/No such bot/)
   })
 
-  it('plays a full game against bots', () => {
+  it.each(['dice', 'poker'] as const)('plays a full game of %s against bots', (game) => {
     vi.useFakeTimers()
     try {
       const { rooms } = setup()
-      rooms.updateSettings('host', { ...rooms.stateFor('host').room!.settings, turnSeconds: 0 })
+      rooms.updateSettings('host', { ...rooms.stateFor('host').room!.settings, game, turnSeconds: 0 })
       rooms.addBot('host')
       rooms.addBot('host')
       rooms.start('host')
       for (let i = 0; i < 2000 && rooms.stateFor('host').game!.phase !== 'over'; i++) {
         const g = rooms.stateFor('host').game!
         if (g.phase === 'bidding' && g.turnPlayerId === 'host')
-          rooms.act('host', g.bid ? { type: 'call' } : { type: 'bid', qty: 1, face: 2 })
+          rooms.act('host', g.bid ? { type: 'call' } : game === 'dice' ? { type: 'bid', qty: 1, face: 2 } : { type: 'bid', claim: { type: 'high', rank: 2 } })
         else vi.advanceTimersByTime(5000)
       }
       expect(rooms.stateFor('host').game!.phase).toBe('over')
@@ -114,11 +114,9 @@ describe('RoomManager bots', () => {
     }
   })
 
-  it('refuses to start a game bots cannot play, and closes the room when the last human leaves', () => {
+  it('closes the room when the last human leaves', () => {
     const { rooms, code } = setup()
     rooms.addBot('host')
-    rooms.updateSettings('host', { ...rooms.stateFor('host').room!.settings, game: 'poker' })
-    expect(() => rooms.start('host')).toThrow(/Bots can't play/)
     rooms.leave('host')
     expect(() => rooms.join('p2', code, 'Bob')).toThrow(/not found/)
   })

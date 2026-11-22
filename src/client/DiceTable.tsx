@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { isLegalRaise, type Bid, type DiceView, type RoundResult } from '../shared/games/liarsDice'
 import type { RoomView, StateMsg } from '../shared/protocol'
 import type { Run } from './App'
-import { Countdown } from './common'
+import { BotTips, Countdown } from './common'
 
 const FACE_CHARS = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
 
@@ -105,6 +105,8 @@ export function DiceTable({ state, room, run }: { state: StateMsg; room: RoomVie
           <ol>{g.history.map((b, i) => <li key={i}>{nameOf(b.by)}: {bidText(b)}</li>)}</ol>
         </details>
       )}
+
+      {room.players.some((p) => p.bot) && <BotTips game="dice" />}
     </div>
   )
 }

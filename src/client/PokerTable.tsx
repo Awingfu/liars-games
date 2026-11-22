@@ -14,7 +14,7 @@ import {
 } from '../shared/games/liarsPoker'
 import type { RoomView, StateMsg } from '../shared/protocol'
 import type { Run } from './App'
-import { Countdown } from './common'
+import { BotTips, Countdown } from './common'
 
 const RANKS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 const ALL_SUITS: Suit[] = [0, 1, 2, 3]
@@ -172,6 +172,8 @@ export function PokerTable({ state, room, run }: { state: StateMsg; room: RoomVi
           <ol>{g.history.map((b, i) => <li key={i}>{nameOf(b.by)}: {describeClaim(b.claim)}</li>)}</ol>
         </details>
       )}
+
+      {room.players.some((p) => p.bot) && <BotTips game="poker" />}
     </div>
   )
 }

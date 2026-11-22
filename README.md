@@ -28,6 +28,8 @@ and rooms live in memory, so a restart or redeploy ends games in progress.
 ```
 src/shared/engine.ts            GameEngine interface + seeded RNG
 src/shared/games/liarsDice.ts   pure rules: init / apply / nextRound / forfeit / viewFor
+src/shared/games/liarsPoker.ts  card version of the same interface
+src/shared/games/*Bot.ts        bot strategies (see Bots)
 src/shared/protocol.ts          zod schemas for client→server messages, server→client types
 src/server/rooms.ts             RoomManager: lobby, host, ready, timers, reveal pause, cleanup
 src/server/index.ts             Socket.IO wiring, session tokens, rate limit
@@ -58,6 +60,31 @@ with that game's schema from `ACTION_SCHEMAS`.
 
 To add another game: implement `GameEngine`, add its config/action schemas to `protocol.ts`, register it in
 `ENGINES`, and add a table component routed from `App.tsx`.
+
+## Bots
+
+The host can add bots in the lobby (**+ Add bot**, ✕ to remove). Bots are always ready, count toward the 8-player
+limit, and can't host; a room closes when its last human leaves. On a bot's turn the server waits 1.2–2.4s, then
+plays the move its strategy picks from `viewFor(state, botId)`, the same redacted view a human gets, so bots
+never see hidden dice or cards. Bot strategies are registered per game in `BOTS` in `rooms.ts`.
+
+- **Dice** (`liarsDiceBot.ts`): exact binomial odds. A bid is true with probability
+  P(Binomial(unseen dice, p) ≥ qty − matches in own dice), where p is 1/6, or 1/3 with wild 1s.
+- **Poker** (`liarsPokerBot.ts`): Monte Carlo. Deals the unseen cards at random 400 times and counts how often
+  each of the 372 possible claims holds (about 3–6 ms per decision).
+
+Both use the same decision rule:
+
+1. Pick a "nerve" threshold at random between 45% and 65% for this decision.
+2. **Opening:** bid the boldest claim at least that likely to be true.
+3. **Responding:** take the cheapest legal raise at least that likely, unless calling has better odds
+   (1 − P(current bid true)). Dice bots say "spot on" when the exact count is likelier than the bid being false.
+4. **Bluffing:** about 15% of the time, when the current bid is only somewhat doubtful (<70% to be false), raise
+   with the likeliest of the next few claims instead of calling.
+
+Known weakness: bots treat every unseen die or card as random and don't infer anything from other players' bids,
+so they're easy to bluff and they call strong-but-honest bids too often. Players see a short version of this
+under **🤖 How the bots play** in the lobby and at the table when bots are in the room.
 
 ## TODO: more games
 

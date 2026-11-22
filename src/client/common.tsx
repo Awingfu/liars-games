@@ -34,3 +34,27 @@ export async function copyText(text: string): Promise<boolean> {
   ta.remove()
   return ok
 }
+
+/** Collapsible explainer for how bots play, shown wherever bots are in the room. */
+export function BotTips({ game }: { game: 'dice' | 'poker' }) {
+  return (
+    <details className="history bot-tips">
+      <summary>🤖 How the bots play</summary>
+      <ul>
+        <li>Bots only see their own {game === 'dice' ? 'dice' : 'cards'}, just like you. They never peek.</li>
+        <li>
+          {game === 'dice'
+            ? 'They work out the odds of each bid from their own dice, treating everyone else’s as random rolls.'
+            : 'They deal out the unseen cards at random hundreds of times and count how often each hand turns up.'}
+        </li>
+        <li>They raise by the smallest amount they think is about 45–65% likely, and call when calling has better odds.</li>
+        {game === 'dice' && <li>With "spot on" on, they use it when the exact count is the most likely result.</li>}
+        <li>About 1 time in 7 they bluff a raise instead of calling a bid that's only somewhat doubtful.</li>
+        <li>
+          <strong>Tip:</strong> they ignore what your bids say about your hand. Bid big on what you hold and they'll
+          often call; bluff with confidence and they won't read anything into it.
+        </li>
+      </ul>
+    </details>
+  )
+}

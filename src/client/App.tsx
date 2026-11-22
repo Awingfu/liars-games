@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { GAME_NAMES, GAME_TYPES, MAX_PLAYERS, type ClientMsg, type RoomSettings, type RoomView, type StateMsg } from '../shared/protocol'
 import { DiceTable } from './DiceTable'
 import { PokerTable } from './PokerTable'
-import { copyText } from './common'
+import { BotTips, copyText } from './common'
 import { send, useServerState } from './socket'
 
 export type Run = (msg: ClientMsg) => Promise<boolean>
@@ -103,9 +103,7 @@ function Home({ run }: { run: Run }) {
 function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run }) {
   const isHost = room.hostId === state.you
   const me = room.players.find((p) => p.id === state.you)
-  const hasBots = room.players.some((p) => p.bot)
-  const botsUnsupported = hasBots && room.settings.game !== 'dice'
-  const canStart = room.players.length >= 2 && !botsUnsupported && room.players.every((p) => p.id === room.hostId || p.ready)
+  const canStart = room.players.length >= 2 && room.players.every((p) => p.id === room.hostId || p.ready)
   const link = `${location.origin}${location.pathname}?room=${room.code}`
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle')
   const linkRef = useRef<HTMLInputElement>(null)
@@ -162,7 +160,7 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
             + Add bot
           </button>
         )}
-        {botsUnsupported && <p className="muted small">Bots can only play {GAME_NAMES.dice} for now. Remove them or switch games.</p>}
+        {room.players.some((p) => p.bot) && <BotTips game={room.settings.game} />}
       </div>
 
       <div className="card">
@@ -248,7 +246,7 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
         <button onClick={() => run({ t: 'room:leave' })}>Leave</button>
         {isHost ? (
           <button className="primary" disabled={!canStart} onClick={() => run({ t: 'game:start' })}>
-            {room.players.length < 2 ? 'Waiting for players…' : botsUnsupported ? 'Bots not supported' : canStart ? 'Start game' : 'Waiting for ready…'}
+            {room.players.length < 2 ? 'Waiting for players…' : canStart ? 'Start game' : 'Waiting for ready…'}
           </button>
         ) : (
           <button className="primary" onClick={() => run({ t: 'room:ready', ready: !me?.ready })}>

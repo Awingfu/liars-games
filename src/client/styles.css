@@ -109,6 +109,9 @@ button.danger { background: var(--danger); border-color: var(--danger); font-wei
 .winner { text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center; }
 .history summary { cursor: pointer; color: var(--muted); }
 .history ol { margin: 8px 0 0; padding-left: 20px; }
+.bot-tips { margin-top: 12px; }
+.bot-tips ul { margin: 8px 0 0; padding-left: 20px; font-size: 0.9em; line-height: 1.45; }
+.bot-tips li + li { margin-top: 4px; }
 
 @media (max-width: 480px) {
   .settings { grid-template-columns: 1fr; }
