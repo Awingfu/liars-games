@@ -110,7 +110,6 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
 
   const update = (patch: Partial<RoomSettings>) => run({ t: 'room:settings', settings: { ...room.settings, ...patch } })
   const { dice, poker } = room.settings
-  const clamp = (v: string, lo: number, hi: number) => Math.max(lo, Math.min(hi, Number(v) || lo))
 
   return (
     <div className="lobby">
@@ -171,10 +170,12 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
             <>
               <label>
                 Starting dice
-                <input
-                  type="number" min={1} max={10} value={dice.startingDice}
-                  onChange={(e) => update({ dice: { ...dice, startingDice: clamp(e.target.value, 1, 10) } })}
-                />
+                <select
+                  value={dice.startingDice}
+                  onChange={(e) => update({ dice: { ...dice, startingDice: Number(e.target.value) } })}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
               </label>
               <TimerSelect value={room.settings.turnSeconds} onChange={(turnSeconds) => update({ turnSeconds })} />
               <div className="option">
@@ -204,10 +205,12 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
             <>
               <label>
                 Starting cards
-                <input
-                  type="number" min={1} max={poker.maxCards} value={poker.startingCards}
-                  onChange={(e) => update({ poker: { ...poker, startingCards: clamp(e.target.value, 1, poker.maxCards) } })}
-                />
+                <select
+                  value={poker.startingCards}
+                  onChange={(e) => update({ poker: { ...poker, startingCards: Number(e.target.value) } })}
+                >
+                  {[1, 2, 3, 4, 5].filter((n) => n <= poker.maxCards).map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
               </label>
               <label>
                 Out after
@@ -218,7 +221,7 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
                     update({ poker: { maxCards, startingCards: Math.min(poker.startingCards, maxCards) } })
                   }}
                 >
-                  {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>more than {n} cards</option>)}
+                  {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>more than {n} cards</option>)}
                 </select>
               </label>
               <TimerSelect value={room.settings.turnSeconds} onChange={(turnSeconds) => update({ turnSeconds })} />

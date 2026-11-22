@@ -14,8 +14,8 @@ export const DiceConfigSchema = z.object({
 })
 
 export const PokerConfigSchema = z.object({
-  startingCards: z.number().int().min(1).max(6),
-  maxCards: z.number().int().min(1).max(6),
+  startingCards: z.number().int().min(1).max(5),
+  maxCards: z.number().int().min(1).max(10),
 })
 
 export const GAME_TYPES = ['dice', 'poker'] as const
