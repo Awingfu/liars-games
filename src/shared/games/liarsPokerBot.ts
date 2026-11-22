@@ -1,4 +1,5 @@
 import type { Rng } from '../engine'
+import { BOT_STYLES, NO_SUPPORT_WEIGHT, perceive, random, type BotLevel } from './botStyle'
 import { claimError, compareClaims, type Card, type Claim, type PokerAction, type PokerView, type Suit } from './liarsPoker'
 
 const RANKS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
@@ -58,50 +59,76 @@ export function holds(p: Pool, c: Claim): boolean {
   }
 }
 
-const SAMPLES = 400
-const random = (rng: Rng) => rng.int(1_000_000) / 1_000_000
+/** Does this hand hold at least one card the claim is built from? */
+export function supports(hand: Card[], c: Claim): boolean {
+  switch (c.type) {
+    case 'high': case 'pair': case 'trips': case 'quads': return hand.some((x) => x.rank === c.rank)
+    case 'twoPair': return hand.some((x) => x.rank === c.high || x.rank === c.low)
+    case 'fullHouse': return hand.some((x) => x.rank === c.trips || x.rank === c.pair)
+    case 'straight': return hand.some((x) => straightRanks(c.high).includes(x.rank))
+    case 'straightFlush': return hand.some((x) => x.suit === c.suit && straightRanks(c.high).includes(x.rank))
+    case 'flush': return hand.some((x) => x.suit === c.suit && x.rank <= c.high)
+  }
+}
 
 /**
  * A Monte Carlo Liar's Poker player. It knows only its own cards; it deals the
- * unseen cards at random many times and counts how often each claim holds.
+ * unseen cards at random many times and counts how often each claim holds. A
+ * bot that reads bids gives less weight to deals where a bidder holds nothing
+ * toward their latest claim.
  */
-export function pokerBotAction(view: PokerView, me: string, rng: Rng): PokerAction {
+export function pokerBotAction(view: PokerView, me: string, rng: Rng, level: BotLevel = 'normal'): PokerAction {
+  const style = BOT_STYLES[level]
   const mine = view.players.find((p) => p.id === me)?.hand ?? []
   const unseen: Card[] = []
   for (const suit of SUITS)
     for (const rank of RANKS) if (!mine.some((c) => c.rank === rank && c.suit === suit)) unseen.push({ rank, suit })
-  const hidden = Math.min(view.totalCards - mine.length, unseen.length)
+  const others = view.players.filter((p) => p.id !== me && p.cardCount > 0)
+  const lastClaim = new Map(view.history.map((b) => [b.by, b.claim]))
+  const hidden = Math.min(others.reduce((n, p) => n + p.cardCount, 0), unseen.length)
 
   const candidates = view.bid ? ALL_CLAIMS.filter((c) => compareClaims(c, view.bid!.claim) >= 0) : ALL_CLAIMS
   const hits = new Array(candidates.length).fill(0)
+  let total = 0
   const deck = [...unseen]
-  for (let s = 0; s < SAMPLES; s++) {
+  for (let s = 0; s < style.samples; s++) {
     // Partial Fisher–Yates: the first `hidden` cards are a random deal.
     for (let i = 0; i < hidden; i++) {
       const j = i + rng.int(deck.length - i)
       ;[deck[i], deck[j]] = [deck[j]!, deck[i]!]
     }
+    let weight = 1
+    if (style.readsBids) {
+      let at = 0
+      for (const p of others) {
+        const claim = lastClaim.get(p.id)
+        if (claim && !supports(deck.slice(at, at + p.cardCount), claim)) weight *= NO_SUPPORT_WEIGHT
+        at += p.cardCount
+      }
+    }
+    total += weight
     const pool = summarize([...mine, ...deck.slice(0, hidden)])
-    for (let k = 0; k < candidates.length; k++) if (holds(pool, candidates[k]!)) hits[k]++
+    for (let k = 0; k < candidates.length; k++) if (holds(pool, candidates[k]!)) hits[k] += weight
   }
-  const p = (k: number) => hits[k]! / SAMPLES
+  const p = perceive((k: number) => hits[k]! / total, String, style.noise, rng)
 
-  // Some noise so the bot isn't perfectly predictable.
-  const nerve = 0.45 + random(rng) * 0.2
+  const [lo, hi] = style.nerve
+  const nerve = lo + random(rng) * (hi - lo)
   const first = view.bid ? 1 : 0 // candidates[0] is the current bid, when there is one
   const raises = candidates.map((claim, k) => ({ claim, p: p(k) })).slice(first)
 
   if (!view.bid) {
-    // Open with the boldest claim that still feels safe.
     const safe = raises.filter((r) => r.p >= nerve)
-    return { type: 'bid', claim: (safe[safe.length - 1] ?? raises[0]!).claim }
+    if (!safe.length) return { type: 'bid', claim: raises[0]!.claim }
+    const pick = style.boldOpen ? safe[safe.length - 1]! : safe[rng.int(safe.length)]!
+    return { type: 'bid', claim: pick.claim }
   }
 
   const callScore = 1 - p(0)
   const raise = raises.find((r) => r.p >= nerve)
   if (raise && raise.p >= callScore) return { type: 'bid', claim: raise.claim }
-  // Occasionally bluff instead of calling a claim that's merely doubtful.
-  if (raises.length && callScore < 0.7 && random(rng) < 0.15) {
+  // Sometimes bluff instead of calling a claim that's merely doubtful.
+  if (raises.length && callScore < 0.7 && random(rng) < style.bluff) {
     const best = raises.slice(0, 8).reduce((a, b) => (b.p > a.p ? b : a))
     return { type: 'bid', claim: best.claim }
   }

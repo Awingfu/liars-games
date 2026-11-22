@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto'
 import type { GameEngine, PlayerId, Rng } from '../shared/engine'
+import type { BotLevel } from '../shared/games/botStyle'
 import { liarsDice } from '../shared/games/liarsDice'
 import { diceBotAction } from '../shared/games/liarsDiceBot'
 import { liarsPoker } from '../shared/games/liarsPoker'
@@ -21,7 +22,7 @@ type AnyEngine = GameEngine<any, any, any, NonNullable<StateMsg['game']>>
 const ENGINES: Record<GameType, AnyEngine> = { dice: liarsDice, poker: liarsPoker }
 /** Bot players for each game, given the bot's own redacted view. Games without one can't have bots. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const BOTS: Partial<Record<GameType, (view: any, me: PlayerId, rng: Rng) => unknown>> = { dice: diceBotAction, poker: pokerBotAction }
+const BOTS: Partial<Record<GameType, (view: any, me: PlayerId, rng: Rng, level: BotLevel) => unknown>> = { dice: diceBotAction, poker: pokerBotAction }
 
 /** How long a bot "thinks" before moving, so humans can follow along. */
 const BOT_DELAY_MS = [1200, 2400] as const
@@ -39,7 +40,8 @@ interface RoomPlayer {
   connected: boolean
   ready: boolean
   left: boolean
-  bot: boolean
+  /** A bot's difficulty; null for humans. */
+  bot: BotLevel | null
 }
 
 interface Room {
@@ -108,7 +110,7 @@ export class RoomManager {
       code,
       hostId: playerId,
       status: 'lobby',
-      players: [{ id: playerId, name, connected: true, ready: false, left: false, bot: false }],
+      players: [{ id: playerId, name, connected: true, ready: false, left: false, bot: null }],
       settings: structuredClone(DEFAULT_SETTINGS),
       playing: null,
       state: null,
@@ -144,7 +146,7 @@ export class RoomManager {
       if (room.players.length >= MAX_PLAYERS) fail('Room is full')
       if (nameTaken) fail(`Someone in this room is already called "${name}". Pick another name.`)
       this.leave(playerId)
-      room.players.push({ id: playerId, name, connected: true, ready: false, left: false, bot: false })
+      room.players.push({ id: playerId, name, connected: true, ready: false, left: false, bot: null })
       this.roomOf.set(playerId, code)
     }
     room.emptySince = null
@@ -178,11 +180,11 @@ export class RoomManager {
     const room = this.hostRoom(playerId)
     if (room.status !== 'lobby') fail('Settings are locked during a game')
     room.settings = settings
-    for (const p of room.players) p.ready = p.bot
+    for (const p of room.players) p.ready = !!p.bot
     this.broadcast(room)
   }
 
-  addBot(playerId: PlayerId) {
+  addBot(playerId: PlayerId, level: BotLevel = 'normal') {
     const room = this.hostRoom(playerId)
     if (room.status !== 'lobby') fail('Game already started')
     if (room.players.length >= MAX_PLAYERS) fail('Room is full')
@@ -191,7 +193,15 @@ export class RoomManager {
     let id: PlayerId
     do id = `bot-${randomInt(1e9).toString(36)}`
     while (room.players.some((p) => p.id === id))
-    room.players.push({ id, name: `Bot ${n}`, connected: true, ready: true, left: false, bot: true })
+    room.players.push({ id, name: `Bot ${n}`, connected: true, ready: true, left: false, bot: level })
+    this.broadcast(room)
+  }
+
+  setBotLevel(playerId: PlayerId, botId: PlayerId, level: BotLevel) {
+    const room = this.hostRoom(playerId)
+    if (room.status !== 'lobby') fail('Game already started')
+    const bot = room.players.find((p) => p.id === botId && p.bot) ?? fail('No such bot')
+    bot.bot = level
     this.broadcast(room)
   }
 
@@ -242,7 +252,7 @@ export class RoomManager {
     room.playing = null
     room.state = null
     room.players = room.players.filter((p) => !p.left)
-    for (const p of room.players) p.ready = p.bot
+    for (const p of room.players) p.ready = !!p.bot
     this.broadcast(room)
   }
 
@@ -301,7 +311,7 @@ export class RoomManager {
     } else if (phase === 'playing') {
       const current = engine.currentPlayer(s)!
       const player = room.players.find((p) => p.id === current)
-      if (player?.bot && !player.left) return this.scheduleBot(room, current)
+      if (player?.bot && !player.left) return this.scheduleBot(room, current, player.bot)
       const connected = player?.connected
       const ms = room.settings.turnSeconds > 0 ? room.settings.turnSeconds * 1000 : connected ? 0 : DISCONNECTED_TURN_MS
       if (!ms) return
@@ -315,13 +325,13 @@ export class RoomManager {
     }
   }
 
-  private scheduleBot(room: Room, botId: PlayerId) {
+  private scheduleBot(room: Room, botId: PlayerId, level: BotLevel) {
     const [lo, hi] = BOT_DELAY_MS
     room.timer = setTimeout(() => {
       const engine = this.engine(room)
       const choose = BOTS[room.playing!]
       const view = engine.viewFor(room.state, botId)
-      let r = choose ? engine.apply(room.state, botId, choose(view, botId, this.rng), this.rng) : null
+      let r = choose ? engine.apply(room.state, botId, choose(view, botId, this.rng, level), this.rng) : null
       if (!r?.ok) r = engine.apply(room.state, botId, engine.timeoutAction(room.state), this.rng)
       if (r.ok) room.state = r.value
       this.schedule(room)

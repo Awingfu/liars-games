@@ -29,7 +29,7 @@ and rooms live in memory, so a restart or redeploy ends games in progress.
 src/shared/engine.ts            GameEngine interface + seeded RNG
 src/shared/games/liarsDice.ts   pure rules: init / apply / nextRound / forfeit / viewFor
 src/shared/games/liarsPoker.ts  card version of the same interface
-src/shared/games/*Bot.ts        bot strategies (see Bots)
+src/shared/games/*Bot.ts        bot strategies; botStyle.ts holds difficulty levels (see Bots)
 src/shared/protocol.ts          zod schemas for client→server messages, server→client types
 src/server/rooms.ts             RoomManager: lobby, host, ready, timers, reveal pause, cleanup
 src/server/index.ts             Socket.IO wiring, session tokens, rate limit
@@ -63,7 +63,7 @@ To add another game: implement `GameEngine`, add its config/action schemas to `p
 
 ## Bots
 
-The host can add bots in the lobby (**+ Add bot**, ✕ to remove). Bots are always ready, count toward the 8-player
+The host can add bots in the lobby (**+ Add bot**, ✕ to remove) and set each one's difficulty. Bots are always ready, count toward the 8-player
 limit, and can't host; a room closes when its last human leaves. On a bot's turn the server waits 1.2–2.4s, then
 plays the move its strategy picks from `viewFor(state, botId)`, the same redacted view a human gets, so bots
 never see hidden dice or cards. Bot strategies are registered per game in `BOTS` in `rooms.ts`.
@@ -75,16 +75,39 @@ never see hidden dice or cards. Bot strategies are registered per game in `BOTS`
 
 Both use the same decision rule:
 
-1. Pick a "nerve" threshold at random between 45% and 65% for this decision.
-2. **Opening:** bid the boldest claim at least that likely to be true.
+1. Pick a "nerve" threshold at random from the level's range for this decision.
+2. **Opening:** bid the boldest claim at least that likely to be true (Easy: a random one of those).
 3. **Responding:** take the cheapest legal raise at least that likely, unless calling has better odds
    (1 − P(current bid true)). Dice bots say "spot on" when the exact count is likelier than the bid being false.
-4. **Bluffing:** about 15% of the time, when the current bid is only somewhat doubtful (<70% to be false), raise
-   with the likeliest of the next few claims instead of calling.
+4. **Bluffing:** with the level's bluff chance, when the current bid is only somewhat doubtful (<70% to be false),
+   raise with the likeliest of the next few claims instead of calling.
 
-Known weakness: bots treat every unseen die or card as random and don't infer anything from other players' bids,
-so they're easy to bluff and they call strong-but-honest bids too often. Players see a short version of this
-under **🤖 How the bots play** in the lobby and at the table when bots are in the room.
+### Difficulty
+
+Levels are parameter sets in `BOT_STYLES` (`src/shared/games/botStyle.ts`):
+
+| Level | Nerve | Odds error | Bluff | Reads bids | Opening | Poker deals |
+|---|---|---|---|---|---|---|
+| Easy | 25–85% | ±35% | 35% | no | random safe claim | 100 |
+| Normal | 45–65% | none | 15% | no | boldest safe claim | 400 |
+| Hard | 50–60% | none | 10% | yes | boldest safe claim | 800 |
+
+**Reading bids** (Hard): a player's latest bid is weak evidence that they hold part of it. Dice: for each opponent
+whose latest bid was on face f, their count of f is reweighted so holding none is 0.2× as likely
+(`NO_SUPPORT_WEIGHT`). Poker: each random deal is weighted 0.2× per opponent whose dealt hand holds no card the
+claim is built from (`supports`), so deals consistent with everyone's bids count for more.
+
+Head-to-head, two players (dice: 5 dice, 1000 games; poker: 2 starting cards, 300 games):
+
+| | Dice | Poker |
+|---|---|---|
+| Normal vs Easy | 62% | 79% |
+| Hard vs Normal | 76% | 60% |
+| Hard vs Easy | 82% | 84% |
+
+Known weakness: Easy and Normal treat every unseen die or card as random, so they're easy to bluff. Hard can be
+steered the other way: bid on what you don't hold and it believes you. Players see a short version of this under
+**🤖 How the bots play** in the lobby and at the table when bots are in the room.
 
 ## TODO: more games
 

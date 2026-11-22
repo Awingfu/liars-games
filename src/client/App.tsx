@@ -3,6 +3,7 @@ import { GAME_NAMES, GAME_TYPES, MAX_PLAYERS, type ClientMsg, type RoomSettings,
 import { DiceTable } from './DiceTable'
 import { PokerTable } from './PokerTable'
 import { BotTips, copyText } from './common'
+import { BOT_LEVELS, type BotLevel } from '../shared/games/botStyle'
 import { send, useServerState } from './socket'
 
 export type Run = (msg: ClientMsg) => Promise<boolean>
@@ -144,7 +145,16 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
                 {p.id === state.you && <span className="muted"> (you)</span>}
               </span>
               <span className="muted">
-                {p.bot ? '🤖 bot' : p.id === room.hostId ? '👑 host' : p.ready ? '✅ ready' : 'not ready'}
+                {p.bot && !isHost && `🤖 ${p.bot} bot`}
+                {p.bot && isHost && (
+                  <select
+                    className="bot-level" aria-label={`${p.name} difficulty`} value={p.bot}
+                    onChange={(e) => run({ t: 'room:botLevel', id: p.id, level: e.target.value as BotLevel })}
+                  >
+                    {BOT_LEVELS.map((l) => <option key={l} value={l}>🤖 {l}</option>)}
+                  </select>
+                )}
+                {p.bot ? '' : p.id === room.hostId ? '👑 host' : p.ready ? '✅ ready' : 'not ready'}
                 {!p.connected && ' · away'}
                 {p.bot && isHost && (
                   <button className="remove-bot" aria-label={`Remove ${p.name}`} onClick={() => run({ t: 'room:removeBot', id: p.id })}>
@@ -156,7 +166,7 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
           ))}
         </ul>
         {isHost && (
-          <button className="add-bot" disabled={room.players.length >= MAX_PLAYERS} onClick={() => run({ t: 'room:addBot' })}>
+          <button className="add-bot" disabled={room.players.length >= MAX_PLAYERS} onClick={() => run({ t: 'room:addBot', level: 'normal' })}>
             + Add bot
           </button>
         )}

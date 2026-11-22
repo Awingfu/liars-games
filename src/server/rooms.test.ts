@@ -80,11 +80,21 @@ describe('RoomManager bots', () => {
     rooms.addBot('host')
     expect(names()).toEqual(['Alice', 'Bot 1', 'Bot 2'])
     const bot = rooms.stateFor('host').room!.players[1]!
-    expect(bot).toMatchObject({ bot: true, ready: true })
+    expect(bot).toMatchObject({ bot: 'normal', ready: true })
     rooms.removeBot('host', bot.id)
     expect(names()).toEqual(['Alice', 'Bot 2'])
     rooms.addBot('host')
     expect(names()).toEqual(['Alice', 'Bot 2', 'Bot 1'])
+  })
+
+  it('host can set a bot\'s difficulty', () => {
+    const { rooms } = setup()
+    rooms.addBot('host', 'easy')
+    const id = rooms.stateFor('host').room!.players[1]!.id
+    expect(rooms.stateFor('host').room!.players[1]!.bot).toBe('easy')
+    rooms.setBotLevel('host', id, 'hard')
+    expect(rooms.stateFor('host').room!.players[1]!.bot).toBe('hard')
+    expect(() => rooms.setBotLevel('host', 'host', 'hard')).toThrow(/No such bot/)
   })
 
   it('only the host can add bots, and only real bots can be removed', () => {

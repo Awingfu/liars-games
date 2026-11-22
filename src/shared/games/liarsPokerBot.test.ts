@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { seededRng } from '../engine'
 import { compareClaims, liarsPoker as E, poolHas, type Card, type Claim, type PokerConfig, type PokerView, type Suit } from './liarsPoker'
-import { ALL_CLAIMS, holds, pokerBotAction } from './liarsPokerBot'
+import { BOT_LEVELS, type BotLevel } from './botStyle'
+import { ALL_CLAIMS, holds, pokerBotAction, supports } from './liarsPokerBot'
 
 function cards(s: string): Card[] {
   const suits: Record<string, Suit> = { c: 0, d: 1, h: 2, s: 3 }
@@ -16,14 +17,14 @@ const summarize = (pool: Card[]) => {
   return { n, suit }
 }
 
-function playOut(players: number, config: PokerConfig, seed: number) {
+function playOut(players: number, config: PokerConfig, seed: number, level: BotLevel = 'normal') {
   const rng = seededRng(seed)
   let s = E.init(Array.from({ length: players }, (_, i) => `b${i}`), config, rng)
   let moves = 0
   while (E.phase(s) !== 'over') {
     if (E.phase(s) === 'reveal') { s = E.nextRound(s, rng); continue }
     const me = E.currentPlayer(s)!
-    const action = pokerBotAction(E.viewFor(s, me), me, rng)
+    const action = pokerBotAction(E.viewFor(s, me), me, rng, level)
     const r = E.apply(s, me, action, rng)
     if (!r.ok) throw new Error(`illegal bot move ${JSON.stringify(action)}: ${r.error}`)
     s = r.value
@@ -53,12 +54,33 @@ describe('poker bot', () => {
     for (const p of pools) for (const c of ALL_CLAIMS) expect(holds(summarize(cards(p)), c)).toBe(poolHas(cards(p), c))
   })
 
-  it('only makes legal moves and games finish', () => {
-    for (let seed = 1; seed <= 25; seed++) {
+  it.each(BOT_LEVELS)('%s: only makes legal moves and games finish', (level) => {
+    for (let seed = 1; seed <= 12; seed++) {
       const maxCards = 2 + (seed % 4)
       const config = { startingCards: 1 + (seed % maxCards), maxCards }
-      expect(playOut(2 + (seed % 4), config, seed).winnerId).toBeTruthy()
+      expect(playOut(2 + (seed % 4), config, seed, level).winnerId).toBeTruthy()
     }
+  })
+
+  it('knows which cards support a claim', () => {
+    expect(supports(cards('Kh 2c'), { type: 'pair', rank: 13 })).toBe(true)
+    expect(supports(cards('Qh 2c'), { type: 'pair', rank: 13 })).toBe(false)
+    expect(supports(cards('7d'), { type: 'straight', high: 9 })).toBe(true)
+    expect(supports(cards('10d'), { type: 'straight', high: 9 })).toBe(false)
+    expect(supports(cards('3h'), { type: 'flush', suit: 2, high: 9 })).toBe(true)
+    expect(supports(cards('Kh 3c'), { type: 'flush', suit: 2, high: 9 })).toBe(false)
+    expect(supports(cards('As'), { type: 'straightFlush', suit: 3, high: 5 })).toBe(true)
+  })
+
+  it('a bot that reads bids believes a claim more when the opponent made it', () => {
+    // Opponent claims a pair of kings; we hold one king. Hard should raise more often than normal.
+    const raises = (level: BotLevel) => {
+      let n = 0
+      for (let seed = 1; seed <= 40; seed++)
+        if (pokerBotAction(view('Kc 4d', 2, { type: 'pair', rank: 13 }), 'me', seededRng(seed), level).type === 'bid') n++
+      return n
+    }
+    expect(raises('hard')).toBeGreaterThan(raises('normal'))
   })
 
   it('calls an unlikely claim', () => {

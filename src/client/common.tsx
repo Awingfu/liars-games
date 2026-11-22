@@ -47,12 +47,16 @@ export function BotTips({ game }: { game: 'dice' | 'poker' }) {
             ? 'They work out the odds of each bid from their own dice, treating everyone else’s as random rolls.'
             : 'They deal out the unseen cards at random hundreds of times and count how often each hand turns up.'}
         </li>
-        <li>They raise by the smallest amount they think is about 45–65% likely, and call when calling has better odds.</li>
+        <li>They raise by the smallest amount they think is likely enough, and call when calling has better odds.</li>
         {game === 'dice' && <li>With "spot on" on, they use it when the exact count is the most likely result.</li>}
-        <li>About 1 time in 7 they bluff a raise instead of calling a bid that's only somewhat doubtful.</li>
         <li>
-          <strong>Tip:</strong> they ignore what your bids say about your hand. Bid big on what you hold and they'll
-          often call; bluff with confidence and they won't read anything into it.
+          <strong>Easy</strong> misjudges the odds, bluffs often (about 1 in 3) and opens timidly.{' '}
+          <strong>Normal</strong> plays the odds straight and bluffs about 1 in 7.{' '}
+          <strong>Hard</strong> also reads your bids: it assumes you hold some of what you bid on, and bluffs about 1 in 10.
+        </li>
+        <li>
+          <strong>Tip:</strong> Easy and Normal ignore what your bids say about your hand, so a confident bluff works
+          on them. Against Hard, bidding on something you don't hold makes it believe you, which you can use too.
         </li>
       </ul>
     </details>
