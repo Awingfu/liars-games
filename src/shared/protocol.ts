@@ -68,6 +68,8 @@ export const ClientMsg = z.discriminatedUnion('t', [
   z.object({ t: z.literal('room:leave') }),
   z.object({ t: z.literal('room:settings'), settings: RoomSettingsSchema }),
   z.object({ t: z.literal('room:ready'), ready: z.boolean() }),
+  z.object({ t: z.literal('room:addBot') }),
+  z.object({ t: z.literal('room:removeBot'), id: z.string().max(40) }),
   z.object({ t: z.literal('game:start') }),
   z.object({ t: z.literal('game:action'), action: z.custom<GameAction>((v) => typeof v === 'object' && v !== null) }),
   z.object({ t: z.literal('game:backToLobby') }),
@@ -82,6 +84,7 @@ export interface RoomPlayerView {
   connected: boolean
   ready: boolean
   left: boolean
+  bot: boolean
 }
 
 export interface RoomView {

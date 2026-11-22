@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { GAME_NAMES, GAME_TYPES, type ClientMsg, type RoomSettings, type RoomView, type StateMsg } from '../shared/protocol'
+import { GAME_NAMES, GAME_TYPES, MAX_PLAYERS, type ClientMsg, type RoomSettings, type RoomView, type StateMsg } from '../shared/protocol'
 import { DiceTable } from './DiceTable'
 import { PokerTable } from './PokerTable'
 import { copyText } from './common'
@@ -103,7 +103,9 @@ function Home({ run }: { run: Run }) {
 function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run }) {
   const isHost = room.hostId === state.you
   const me = room.players.find((p) => p.id === state.you)
-  const canStart = room.players.length >= 2 && room.players.every((p) => p.id === room.hostId || p.ready)
+  const hasBots = room.players.some((p) => p.bot)
+  const botsUnsupported = hasBots && room.settings.game !== 'dice'
+  const canStart = room.players.length >= 2 && !botsUnsupported && room.players.every((p) => p.id === room.hostId || p.ready)
   const link = `${location.origin}${location.pathname}?room=${room.code}`
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle')
   const linkRef = useRef<HTMLInputElement>(null)
@@ -144,12 +146,23 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
                 {p.id === state.you && <span className="muted"> (you)</span>}
               </span>
               <span className="muted">
-                {p.id === room.hostId ? '👑 host' : p.ready ? '✅ ready' : 'not ready'}
+                {p.bot ? '🤖 bot' : p.id === room.hostId ? '👑 host' : p.ready ? '✅ ready' : 'not ready'}
                 {!p.connected && ' · away'}
+                {p.bot && isHost && (
+                  <button className="remove-bot" aria-label={`Remove ${p.name}`} onClick={() => run({ t: 'room:removeBot', id: p.id })}>
+                    ✕
+                  </button>
+                )}
               </span>
             </li>
           ))}
         </ul>
+        {isHost && (
+          <button className="add-bot" disabled={room.players.length >= MAX_PLAYERS} onClick={() => run({ t: 'room:addBot' })}>
+            + Add bot
+          </button>
+        )}
+        {botsUnsupported && <p className="muted small">Bots can only play {GAME_NAMES.dice} for now. Remove them or switch games.</p>}
       </div>
 
       <div className="card">
@@ -235,7 +248,7 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
         <button onClick={() => run({ t: 'room:leave' })}>Leave</button>
         {isHost ? (
           <button className="primary" disabled={!canStart} onClick={() => run({ t: 'game:start' })}>
-            {room.players.length < 2 ? 'Waiting for players…' : canStart ? 'Start game' : 'Waiting for ready…'}
+            {room.players.length < 2 ? 'Waiting for players…' : botsUnsupported ? 'Bots not supported' : canStart ? 'Start game' : 'Waiting for ready…'}
           </button>
         ) : (
           <button className="primary" onClick={() => run({ t: 'room:ready', ready: !me?.ready })}>

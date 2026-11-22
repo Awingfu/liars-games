@@ -1,10 +1,12 @@
 import { randomInt } from 'node:crypto'
 import type { GameEngine, PlayerId, Rng } from '../shared/engine'
 import { liarsDice } from '../shared/games/liarsDice'
+import { diceBotAction } from '../shared/games/liarsDiceBot'
 import { liarsPoker } from '../shared/games/liarsPoker'
 import {
   ACTION_SCHEMAS,
   DEFAULT_SETTINGS,
+  GAME_NAMES,
   MAX_PLAYERS,
   type GameType,
   type RoomSettings,
@@ -16,6 +18,12 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyEngine = GameEngine<any, any, any, NonNullable<StateMsg['game']>>
 const ENGINES: Record<GameType, AnyEngine> = { dice: liarsDice, poker: liarsPoker }
+/** Bot players for each game, given the bot's own redacted view. Games without one can't have bots. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const BOTS: Partial<Record<GameType, (view: any, me: PlayerId, rng: Rng) => unknown>> = { dice: diceBotAction }
+
+/** How long a bot "thinks" before moving, so humans can follow along. */
+const BOT_DELAY_MS = [1200, 2400] as const
 
 const REVEAL_MS = 5000
 /** Turn limit used for a disconnected player when the room has no timer. */
@@ -30,6 +38,7 @@ interface RoomPlayer {
   connected: boolean
   ready: boolean
   left: boolean
+  bot: boolean
 }
 
 interface Room {
@@ -80,7 +89,7 @@ export class RoomManager {
       code: room.code,
       hostId: room.hostId,
       status: room.status,
-      players: room.players.map(({ id, name, connected, ready, left }) => ({ id, name, connected, ready, left })),
+      players: room.players.map(({ id, name, connected, ready, left, bot }) => ({ id, name, connected, ready, left, bot })),
       settings: room.settings,
       deadline: room.deadline,
     }
@@ -98,7 +107,7 @@ export class RoomManager {
       code,
       hostId: playerId,
       status: 'lobby',
-      players: [{ id: playerId, name, connected: true, ready: false, left: false }],
+      players: [{ id: playerId, name, connected: true, ready: false, left: false, bot: false }],
       settings: structuredClone(DEFAULT_SETTINGS),
       playing: null,
       state: null,
@@ -119,7 +128,7 @@ export class RoomManager {
   join(playerId: PlayerId, code: string, name: string): PlayerId {
     const room = this.rooms.get(code) ?? fail('Room not found')
     const existing = room.players.find((p) => p.id === playerId && !p.left)
-    const awaySeat = !existing && room.players.find((p) => !p.left && !p.connected && sameName(p.name, name))
+    const awaySeat = !existing && room.players.find((p) => !p.bot && !p.left && !p.connected && sameName(p.name, name))
     if (awaySeat) {
       this.leave(playerId)
       this.setConnected(awaySeat.id, true)
@@ -134,7 +143,7 @@ export class RoomManager {
       if (room.players.length >= MAX_PLAYERS) fail('Room is full')
       if (nameTaken) fail(`Someone in this room is already called "${name}". Pick another name.`)
       this.leave(playerId)
-      room.players.push({ id: playerId, name, connected: true, ready: false, left: false })
+      room.players.push({ id: playerId, name, connected: true, ready: false, left: false, bot: false })
       this.roomOf.set(playerId, code)
     }
     room.emptySince = null
@@ -156,11 +165,11 @@ export class RoomManager {
       this.schedule(room)
     }
     if (room.hostId === playerId) {
-      const next = room.players.find((p) => !p.left)
+      const next = room.players.find((p) => !p.left && !p.bot)
       if (next) room.hostId = next.id
     }
     this.send(playerId, { you: playerId, room: null, game: null })
-    if (!room.players.some((p) => !p.left)) return this.destroy(room)
+    if (!room.players.some((p) => !p.left && !p.bot)) return this.destroy(room)
     this.broadcast(room)
   }
 
@@ -168,7 +177,28 @@ export class RoomManager {
     const room = this.hostRoom(playerId)
     if (room.status !== 'lobby') fail('Settings are locked during a game')
     room.settings = settings
-    for (const p of room.players) p.ready = false
+    for (const p of room.players) p.ready = p.bot
+    this.broadcast(room)
+  }
+
+  addBot(playerId: PlayerId) {
+    const room = this.hostRoom(playerId)
+    if (room.status !== 'lobby') fail('Game already started')
+    if (room.players.length >= MAX_PLAYERS) fail('Room is full')
+    let n = 1
+    while (room.players.some((p) => sameName(p.name, `Bot ${n}`))) n++
+    let id: PlayerId
+    do id = `bot-${randomInt(1e9).toString(36)}`
+    while (room.players.some((p) => p.id === id))
+    room.players.push({ id, name: `Bot ${n}`, connected: true, ready: true, left: false, bot: true })
+    this.broadcast(room)
+  }
+
+  removeBot(playerId: PlayerId, botId: PlayerId) {
+    const room = this.hostRoom(playerId)
+    if (room.status !== 'lobby') fail('Game already started')
+    if (!room.players.some((p) => p.id === botId && p.bot)) fail('No such bot')
+    room.players = room.players.filter((p) => p.id !== botId)
     this.broadcast(room)
   }
 
@@ -187,6 +217,7 @@ export class RoomManager {
     const game = room.settings.game
     const engine = ENGINES[game]
     const config = room.settings[game]
+    if (room.players.some((p) => p.bot) && !BOTS[game]) fail(`Bots can't play ${GAME_NAMES[game]} yet`)
     const problem = engine.canStart?.(room.players.length, config)
     if (problem) fail(problem)
     room.status = 'playing'
@@ -208,7 +239,7 @@ export class RoomManager {
     room.playing = null
     room.state = null
     room.players = room.players.filter((p) => !p.left)
-    for (const p of room.players) p.ready = false
+    for (const p of room.players) p.ready = p.bot
     this.broadcast(room)
   }
 
@@ -234,7 +265,7 @@ export class RoomManager {
     const p = room.players.find((p) => p.id === playerId)
     if (!p || p.left) return
     p.connected = connected
-    if (room.players.every((p) => !p.connected)) room.emptySince ??= Date.now()
+    if (room.players.every((p) => p.bot || !p.connected)) room.emptySince ??= Date.now()
     else room.emptySince = null
     // Without a room timer, a disconnected player's turn still needs a limit.
     if (room.state && room.settings.turnSeconds === 0 && this.engine(room).currentPlayer(room.state) === playerId)
@@ -266,7 +297,9 @@ export class RoomManager {
       }, REVEAL_MS)
     } else if (phase === 'playing') {
       const current = engine.currentPlayer(s)!
-      const connected = room.players.find((p) => p.id === current)?.connected
+      const player = room.players.find((p) => p.id === current)
+      if (player?.bot && !player.left) return this.scheduleBot(room, current)
+      const connected = player?.connected
       const ms = room.settings.turnSeconds > 0 ? room.settings.turnSeconds * 1000 : connected ? 0 : DISCONNECTED_TURN_MS
       if (!ms) return
       room.deadline = Date.now() + ms
@@ -277,6 +310,20 @@ export class RoomManager {
         this.broadcast(room)
       }, ms)
     }
+  }
+
+  private scheduleBot(room: Room, botId: PlayerId) {
+    const [lo, hi] = BOT_DELAY_MS
+    room.timer = setTimeout(() => {
+      const engine = this.engine(room)
+      const choose = BOTS[room.playing!]
+      const view = engine.viewFor(room.state, botId)
+      let r = choose ? engine.apply(room.state, botId, choose(view, botId, this.rng), this.rng) : null
+      if (!r?.ok) r = engine.apply(room.state, botId, engine.timeoutAction(room.state), this.rng)
+      if (r.ok) room.state = r.value
+      this.schedule(room)
+      this.broadcast(room)
+    }, lo + this.rng.int(hi - lo))
   }
 
   private clearTimer(room: Room) {
@@ -307,6 +354,6 @@ export class RoomManager {
   }
 
   private broadcast(room: Room) {
-    for (const p of room.players) if (!p.left) this.send(p.id, this.stateFor(p.id))
+    for (const p of room.players) if (!p.left && !p.bot) this.send(p.id, this.stateFor(p.id))
   }
 }

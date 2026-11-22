@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { seededRng } from '../shared/engine'
 import type { StateMsg } from '../shared/protocol'
 import { RoomManager } from './rooms'
@@ -70,5 +70,56 @@ describe('RoomManager seat reclaim', () => {
     rooms.start('host')
     rooms.leave('cara') // forfeits mid-game
     expect(() => rooms.join('cara2', code, 'Cara')).toThrow(/in progress/)
+  })
+})
+
+describe('RoomManager bots', () => {
+  it('host can add and remove bots; bots are always ready', () => {
+    const { rooms, names } = setup()
+    rooms.addBot('host')
+    rooms.addBot('host')
+    expect(names()).toEqual(['Alice', 'Bot 1', 'Bot 2'])
+    const bot = rooms.stateFor('host').room!.players[1]!
+    expect(bot).toMatchObject({ bot: true, ready: true })
+    rooms.removeBot('host', bot.id)
+    expect(names()).toEqual(['Alice', 'Bot 2'])
+    rooms.addBot('host')
+    expect(names()).toEqual(['Alice', 'Bot 2', 'Bot 1'])
+  })
+
+  it('only the host can add bots, and only real bots can be removed', () => {
+    const { rooms, code } = setup()
+    rooms.join('p2', code, 'Bob')
+    expect(() => rooms.addBot('p2')).toThrow(/host/)
+    expect(() => rooms.removeBot('host', 'p2')).toThrow(/No such bot/)
+  })
+
+  it('plays a full game against bots', () => {
+    vi.useFakeTimers()
+    try {
+      const { rooms } = setup()
+      rooms.updateSettings('host', { ...rooms.stateFor('host').room!.settings, turnSeconds: 0 })
+      rooms.addBot('host')
+      rooms.addBot('host')
+      rooms.start('host')
+      for (let i = 0; i < 2000 && rooms.stateFor('host').game!.phase !== 'over'; i++) {
+        const g = rooms.stateFor('host').game!
+        if (g.phase === 'bidding' && g.turnPlayerId === 'host')
+          rooms.act('host', g.bid ? { type: 'call' } : { type: 'bid', qty: 1, face: 2 })
+        else vi.advanceTimersByTime(5000)
+      }
+      expect(rooms.stateFor('host').game!.phase).toBe('over')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('refuses to start a game bots cannot play, and closes the room when the last human leaves', () => {
+    const { rooms, code } = setup()
+    rooms.addBot('host')
+    rooms.updateSettings('host', { ...rooms.stateFor('host').room!.settings, game: 'poker' })
+    expect(() => rooms.start('host')).toThrow(/Bots can't play/)
+    rooms.leave('host')
+    expect(() => rooms.join('p2', code, 'Bob')).toThrow(/not found/)
   })
 })
