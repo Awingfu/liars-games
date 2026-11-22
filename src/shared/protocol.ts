@@ -28,6 +28,8 @@ export const RoomSettingsSchema = z.object({
   poker: PokerConfigSchema,
   /** 0 = no turn timer. */
   turnSeconds: z.number().int().min(0).max(300),
+  /** Randomize seating order when the game starts. */
+  shuffleSeats: z.boolean().default(false),
 })
 export type RoomSettings = z.infer<typeof RoomSettingsSchema>
 
@@ -115,4 +117,5 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   dice: { startingDice: 5, onesWild: false, spotOn: true },
   poker: { startingCards: 1, maxCards: 5 },
   turnSeconds: 45,
+  shuffleSeats: false,
 }

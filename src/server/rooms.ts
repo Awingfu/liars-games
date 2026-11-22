@@ -223,11 +223,13 @@ export class RoomManager {
     if (problem) fail(problem)
     room.status = 'playing'
     room.playing = game
-    room.state = engine.init(
-      room.players.map((p) => p.id),
-      config,
-      this.rng,
-    )
+    const seats = room.players.map((p) => p.id)
+    if (room.settings.shuffleSeats)
+      for (let i = seats.length - 1; i > 0; i--) {
+        const j = this.rng.int(i + 1)
+        ;[seats[i], seats[j]] = [seats[j]!, seats[i]!]
+      }
+    room.state = engine.init(seats, config, this.rng)
     this.schedule(room)
     this.broadcast(room)
   }

@@ -121,3 +121,31 @@ describe('RoomManager bots', () => {
     expect(() => rooms.join('p2', code, 'Bob')).toThrow(/not found/)
   })
 })
+
+describe('RoomManager seat shuffle', () => {
+  const order = (shuffleSeats: boolean, seed: number) => {
+    const last = new Map<string, StateMsg>()
+    const rooms = new RoomManager((id, msg) => last.set(id, msg), seededRng(seed))
+    rooms.create('host', 'Alice')
+    for (let i = 0; i < 5; i++) rooms.addBot('host')
+    rooms.updateSettings('host', { ...rooms.stateFor('host').room!.settings, shuffleSeats })
+    const joined = rooms.stateFor('host').room!.players.map((p) => p.id)
+    rooms.start('host')
+    const seats = rooms.stateFor('host').game!.players.map((p) => p.id)
+    rooms.leave('host')
+    return { joined, seats }
+  }
+
+  it('keeps join order by default', () => {
+    for (let seed = 1; seed <= 5; seed++) {
+      const { joined, seats } = order(false, seed)
+      expect(seats).toEqual(joined)
+    }
+  })
+
+  it('shuffles seats when enabled', () => {
+    const results = Array.from({ length: 10 }, (_, i) => order(true, i + 1))
+    for (const { joined, seats } of results) expect([...seats].sort()).toEqual([...joined].sort())
+    expect(results.some(({ joined, seats }) => seats.join() !== joined.join())).toBe(true)
+  })
+})

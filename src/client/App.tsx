@@ -238,6 +238,13 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
               <TimerSelect value={room.settings.turnSeconds} onChange={(turnSeconds) => update({ turnSeconds })} />
             </>
           )}
+          <div className="option">
+            <label className="check">
+              <input type="checkbox" checked={room.settings.shuffleSeats} onChange={(e) => update({ shuffleSeats: e.target.checked })} />
+              Shuffle seating order
+            </label>
+            <p className="hint">Randomize who sits next to whom when the game starts, instead of using join order.</p>
+          </div>
         </fieldset>
         {!isHost && <p className="muted small">Only the host can change settings.</p>}
       </div>
