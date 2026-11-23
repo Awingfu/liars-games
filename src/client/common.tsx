@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import type { RoomView, ScoreView } from '../shared/protocol'
+import type { Run } from './App'
 
 export function Countdown({ deadline, urgentAt = 5 }: { deadline: number; urgentAt?: number }) {
   const [now, setNow] = useState(Date.now())
@@ -36,7 +38,27 @@ export async function copyText(text: string): Promise<boolean> {
 }
 
 /** Collapsible explainer for how bots play, shown wherever bots are in the room. */
-export function BotTips({ game }: { game: 'dice' | 'poker' }) {
+export function BotTips({ game }: { game: 'dice' | 'poker' | 'mia' }) {
+  if (game === 'mia')
+    return (
+      <details className="history bot-tips">
+        <summary>🤖 How the bots play</summary>
+        <ul>
+          <li>Bots only see their own roll, and only after they've rolled. They never peek under the cup.</li>
+          <li>They call when the announcement looks less likely to be true than their chances of beating it.</li>
+          <li>When they roll well enough they usually tell the truth; otherwise they lie just above the last announcement.</li>
+          <li>Against Mia they call only when they doubt it enough to risk losing 2 lives.</li>
+          <li>
+            <strong>Easy</strong> misjudges the odds and sometimes inflates a good roll. <strong>Normal</strong> takes
+            each announcement at face value. <strong>Hard</strong> reads announcements: one just barely above the last
+            looks like a lie, a big jump looks honest.
+          </li>
+          <li>
+            <strong>Tip:</strong> against Hard, lie with a jump rather than the minimum; it's suspicious of small steps.
+          </li>
+        </ul>
+      </details>
+    )
   return (
     <details className="history bot-tips">
       <summary>🤖 How the bots play</summary>
@@ -60,5 +82,63 @@ export function BotTips({ game }: { game: 'dice' | 'poker' }) {
         </li>
       </ul>
     </details>
+  )
+}
+
+/** Wins per player across every game played in this room. */
+export function Scoreboard({ scores, you }: { scores: ScoreView[]; you: string }) {
+  return (
+    <div className="card scoreboard">
+      <h2>Scoreboard</h2>
+      <table>
+        <thead>
+          <tr><th>Player</th><th className="num">Wins</th><th className="num">Games</th></tr>
+        </thead>
+        <tbody>
+          {scores.map((s, i) => (
+            <tr key={s.id} className={s.id === you ? 'you' : ''}>
+              <td>{i === 0 && s.wins > 0 ? '🏆 ' : ''}{s.name}{s.id === you ? ' (you)' : ''}</td>
+              <td className="num">{s.wins}</td>
+              <td className="num">{s.games}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Top line of a game table: status text, a watching badge for spectators, and Leave. */
+export function TableHead({ children, room, you, run }: { children: ReactNode; room: RoomView; you: string; run: Run }) {
+  const watching = room.players.find((p) => p.id === you)?.spectator
+  return (
+    <div className="table-head">
+      <span>{children}</span>
+      <span className="row">
+        {watching && <span className="watching-badge">👀 Watching · you'll play next game</span>}
+        <button
+          className="small-btn"
+          onClick={() => (watching || confirm('Leave this game? You will forfeit.')) && run({ t: 'room:leave' })}
+        >
+          Leave
+        </button>
+      </span>
+    </div>
+  )
+}
+
+/** Winner banner, the room's scoreboard, and the host's way back to the lobby. */
+export function GameOver({ winnerId, room, you, run }: { winnerId: string | null; room: RoomView; you: string; run: Run }) {
+  const name = room.players.find((p) => p.id === winnerId)?.name ?? room.scores.find((s) => s.id === winnerId)?.name ?? '?'
+  return (
+    <div className="card winner">
+      <div className="big">🏆 {winnerId === you ? 'You win!' : `${name} wins!`}</div>
+      {room.scores.length > 0 && <Scoreboard scores={room.scores} you={you} />}
+      {room.hostId === you ? (
+        <button className="primary" onClick={() => run({ t: 'game:backToLobby' })}>Back to lobby</button>
+      ) : (
+        <p className="muted">Waiting for the host to start another game…</p>
+      )}
+    </div>
   )
 }

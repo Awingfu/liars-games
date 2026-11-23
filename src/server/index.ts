@@ -97,6 +97,7 @@ io.on('connection', (socket) => {
         case 'room:leave': rooms.leave(playerId); break
         case 'room:settings': rooms.updateSettings(playerId, msg.settings); break
         case 'room:ready': rooms.setReady(playerId, msg.ready); break
+        case 'room:spectate': rooms.setSpectator(playerId, msg.spectator); break
         case 'room:addBot': rooms.addBot(playerId, msg.level); break
         case 'room:botLevel': rooms.setBotLevel(playerId, msg.id, msg.level); break
         case 'room:removeBot': rooms.removeBot(playerId, msg.id); break

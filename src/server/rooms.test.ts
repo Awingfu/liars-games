@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { seededRng } from '../shared/engine'
+import type { DiceView } from '../shared/games/liarsDice'
+import type { PokerView } from '../shared/games/liarsPoker'
 import type { StateMsg } from '../shared/protocol'
 import { RoomManager } from './rooms'
 
@@ -69,7 +71,8 @@ describe('RoomManager seat reclaim', () => {
     rooms.setReady('cara', true)
     rooms.start('host')
     rooms.leave('cara') // forfeits mid-game
-    expect(() => rooms.join('cara2', code, 'Cara')).toThrow(/in progress/)
+    expect(rooms.join('cara2', code, 'Cara')).toBe('cara2') // a new spectator, not the forfeited seat
+    expect(rooms.stateFor('cara2').room!.players.find((p) => p.id === 'cara2')!.spectator).toBe(true)
   })
 })
 
@@ -113,7 +116,7 @@ describe('RoomManager bots', () => {
       rooms.addBot('host')
       rooms.start('host')
       for (let i = 0; i < 2000 && rooms.stateFor('host').game!.phase !== 'over'; i++) {
-        const g = rooms.stateFor('host').game!
+        const g = rooms.stateFor('host').game! as DiceView | PokerView
         if (g.phase === 'bidding' && g.turnPlayerId === 'host')
           rooms.act('host', g.bid ? { type: 'call' } : game === 'dice' ? { type: 'bid', qty: 1, face: 2 } : { type: 'bid', claim: { type: 'high', rank: 2 } })
         else vi.advanceTimersByTime(5000)
@@ -157,5 +160,104 @@ describe('RoomManager seat shuffle', () => {
     const results = Array.from({ length: 10 }, (_, i) => order(true, i + 1))
     for (const { joined, seats } of results) expect([...seats].sort()).toEqual([...joined].sort())
     expect(results.some(({ joined, seats }) => seats.join() !== joined.join())).toBe(true)
+  })
+})
+
+describe('RoomManager spectators', () => {
+  function midGame() {
+    const { rooms, code, names } = setup()
+    rooms.join('bob', code, 'Bob')
+    rooms.setReady('bob', true)
+    rooms.start('host')
+    return { rooms, code, names }
+  }
+  const member = (rooms: RoomManager, id: string) => rooms.stateFor('host').room!.players.find((p) => p.id === id)
+
+  it('joining mid-game makes you a spectator who sees no hidden info', () => {
+    const { rooms, code } = midGame()
+    rooms.join('sam', code, 'Sam')
+    expect(member(rooms, 'sam')).toMatchObject({ spectator: true })
+    const g = rooms.stateFor('sam').game as DiceView
+    expect(g.players.map((p) => p.id)).toEqual(expect.not.arrayContaining(['sam']))
+    expect(g.players.every((p) => p.dice === null)).toBe(true)
+    expect(() => rooms.act('sam', { type: 'call' })).toThrow()
+  })
+
+  it('a spectator leaving mid-game is simply removed, and spectators get seats next game', () => {
+    const { rooms, code, names } = midGame()
+    rooms.join('sam', code, 'Sam')
+    rooms.join('kim', code, 'Kim')
+    rooms.leave('kim')
+    expect(names()).toEqual(['Alice', 'Bob', 'Sam'])
+    rooms.leave('bob') // forfeit ends the 2-player game
+    rooms.backToLobby('host')
+    expect(member(rooms, 'sam')).toMatchObject({ spectator: false, ready: false })
+  })
+
+  it('a full lobby seats newcomers as spectators; they can take a freed seat', () => {
+    const { rooms, code } = setup()
+    for (let i = 0; i < 7; i++) rooms.addBot('host')
+    rooms.join('sam', code, 'Sam')
+    expect(member(rooms, 'sam')!.spectator).toBe(true)
+    expect(() => rooms.setSpectator('sam', false)).toThrow(/No free seats/)
+    rooms.removeBot('host', rooms.stateFor('host').room!.players.find((p) => p.bot)!.id)
+    rooms.setSpectator('sam', false)
+    expect(member(rooms, 'sam')!.spectator).toBe(false)
+  })
+
+  it('spectators are left out of the game and the ready check', () => {
+    const { rooms, code } = setup()
+    rooms.join('bob', code, 'Bob')
+    rooms.join('sam', code, 'Sam')
+    rooms.setSpectator('sam', true) // not ready, but watching
+    rooms.setReady('bob', true)
+    rooms.start('host')
+    expect(rooms.stateFor('host').game!.players.map((p) => p.id).sort()).toEqual(['bob', 'host'])
+  })
+})
+
+describe('RoomManager scoreboard', () => {
+  it('counts wins and games per player across games', () => {
+    const { rooms, code } = setup()
+    rooms.join('bob', code, 'Bob')
+    rooms.join('cara', code, 'Cara')
+    const play = (quitter: string, winnerLeft: string) => {
+      for (const id of ['bob', 'cara']) rooms.setReady(id, true)
+      rooms.start('host')
+      // Two forfeits end it; forfeiters rejoin the lobby afterwards.
+      rooms.leave(quitter)
+      rooms.leave(winnerLeft)
+      rooms.backToLobby('host')
+      rooms.join(quitter, code, quitter === 'bob' ? 'Bob' : 'Cara')
+      rooms.join(winnerLeft, code, winnerLeft === 'bob' ? 'Bob' : 'Cara')
+    }
+    play('bob', 'cara')
+    play('cara', 'bob')
+    const scores = rooms.stateFor('host').room!.scores
+    expect(scores[0]).toMatchObject({ name: 'Alice', wins: 2, games: 2 })
+    expect(scores.find((s) => s.name === 'Bob')).toMatchObject({ wins: 0, games: 2 })
+  })
+
+  it('records a finished game once and includes bots', () => {
+    vi.useFakeTimers()
+    try {
+      const { rooms } = setup()
+      rooms.updateSettings('host', { ...rooms.stateFor('host').room!.settings, turnSeconds: 0 })
+      rooms.addBot('host')
+      rooms.start('host')
+      for (let i = 0; i < 2000 && rooms.stateFor('host').game!.phase !== 'over'; i++) {
+        const g = rooms.stateFor('host').game! as DiceView
+        if (g.phase === 'bidding' && g.turnPlayerId === 'host')
+          rooms.act('host', g.bid ? { type: 'call' } : { type: 'bid', qty: 1, face: 2 })
+        else vi.advanceTimersByTime(5000)
+      }
+      vi.advanceTimersByTime(60_000)
+      const scores = rooms.stateFor('host').room!.scores
+      expect(scores.map((s) => s.name).sort()).toEqual(['Alice', 'Bot 1'])
+      expect(scores.every((s) => s.games === 1)).toBe(true)
+      expect(scores.reduce((n, s) => n + s.wins, 0)).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

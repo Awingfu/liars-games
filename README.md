@@ -1,4 +1,6 @@
-# Liar's Dice & Liar's Poker
+# Liar's Games
+
+Liar's Dice, Liar's Poker and Mia.
 
 Private-room multiplayer over WebSockets. Node + TypeScript + Socket.IO server, React + Vite client.
 
@@ -29,6 +31,7 @@ and rooms live in memory, so a restart or redeploy ends games in progress.
 src/shared/engine.ts            GameEngine interface + seeded RNG
 src/shared/games/liarsDice.ts   pure rules: init / apply / nextRound / forfeit / viewFor
 src/shared/games/liarsPoker.ts  card version of the same interface
+src/shared/games/mia.ts         Mia (Mäxchen): two dice, lives
 src/shared/games/*Bot.ts        bot strategies; botStyle.ts holds difficulty levels (see Bots)
 src/shared/protocol.ts          zod schemas for client→server messages, server→client types
 src/server/rooms.ts             RoomManager: lobby, host, ready, timers, reveal pause, cleanup
@@ -57,9 +60,24 @@ with that game's schema from `ACTION_SCHEMAS`.
 - **Liar's Poker** (`liarsPoker.ts`, card version): bid a poker hand that exists in everyone's cards combined.
   Raises must be strictly higher (category, then ranks, then suit ♣<♦<♥<♠). Loser of a call is dealt one more
   card next round and is out past the max.
+- **Mia** (`mia.ts`): roll two dice in secret and announce a value that beats the last one, truthfully or not.
+  The next player believes it (rolls and must beat it) or calls Liar; whoever is wrong loses a life. Values read
+  high die first; ranking low to high is 31 … 65, then pairs 11 … 66, then Mia (21). Against Mia you can give up
+  (lose 1) or call, but calling a real Mia costs 2 lives. A roll that beats the announcement counts as true.
+  Setting: lives (1–6).
 
 To add another game: implement `GameEngine`, add its config/action schemas to `protocol.ts`, register it in
 `ENGINES`, and add a table component routed from `App.tsx`.
+
+## Rooms
+
+- **Spectators.** Joining a room mid-game, or a lobby that already has 8 players, makes you a spectator: you see
+  the table (no hidden dice, cards or rolls) but don't play. In the lobby anyone can switch with **Just watch** /
+  **Take a seat**; spectators are left out of the ready check. When the host returns to the lobby, spectators fill
+  free seats in arrival order. A room holds up to 20 people in total.
+- **Scoreboard.** Each room keeps wins and games played per player (bots included) for as long as it exists,
+  shown in the lobby and on the game-over card. A game counts once when it ends, for everyone seated at the start,
+  including players who forfeited.
 
 ## Bots
 
@@ -72,8 +90,16 @@ never see hidden dice or cards. Bot strategies are registered per game in `BOTS`
   P(Binomial(unseen dice, p) ≥ qty − matches in own dice), where p is 1/6, or 1/3 with wild 1s.
 - **Poker** (`liarsPokerBot.ts`): Monte Carlo. Deals the unseen cards at random 400 times and counts how often
   each of the 372 possible claims holds (about 3–6 ms per decision).
+- **Mia** (`miaBot.ts`): exact odds over the 21 values. Calls when 1 − P(claim true) beats its chance of surviving
+  a roll (P(roll beats claim) + 40% of the rest, for a successful bluff). After rolling it tells the truth when it
+  beats the claim, otherwise lies just above it. Against Mia it calls only if 2·P(real) < 1 + ½·P(fake).
+  Hard reads announcements: a liar has no roll beating the previous claim and tends to announce one of the next
+  3 values, so a minimal step is more suspicious than a jump (Bayes over "rolled exactly this" vs "lied to this").
+  Easy sometimes inflates an honest roll.
 
-Both use the same decision rule:
+Mia head-to-head (3 lives, 3000 games): Normal beats Easy 62%, Hard beats Normal 71%, Hard beats Easy 73%.
+
+Dice and poker bots use the same decision rule:
 
 1. Pick a "nerve" threshold at random from the level's range for this decision.
 2. **Opening:** bid the boldest claim at least that likely to be true (Easy: a random one of those).
@@ -111,11 +137,7 @@ steered the other way: bid on what you don't hold and it believes you. Players s
 
 ## TODO: more games
 
-- [ ] **Mia (Mäxchen)**: each player rolls two dice in secret and announces a result that must beat the last one
-  (truthfully or not). The next player either accepts and takes the cup, or calls "liar" and lifts it; whoever
-  is wrong loses a life. Ranking: 2-1 ("Mia") highest, then doubles (1-1 lowest, 6-6 highest), then the rest
-  read high-die-first as a number (6-5 = 65 down to 3-1 = 31). Needs a new engine, a "lives" setting, and a small
-  table UI.
+- [x] **Mia (Mäxchen)**: done, see Games.
 - [ ] **Dollar-bill Liar's Poker**: everyone holds 8 random digits (like a banknote serial number) and bids counts
   of a digit across all players, e.g. "four 7s". Mechanically Liar's Dice with ten-sided dice and 8 per player,
   so it can likely reuse `liarsDice.ts` with a faces/count setting.

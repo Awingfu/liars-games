@@ -64,12 +64,21 @@ button.danger { background: var(--danger); border-color: var(--danger); font-wei
 .players li.away { opacity: 0.55; }
 .players .remove-bot { margin-left: 8px; padding: 0 8px; min-height: 0; line-height: 1.6; }
 .add-bot { margin-top: 10px; width: 100%; }
+.watchers { margin: 10px 0 0; }
+.hint.flush { margin-left: 0; }
+.scoreboard table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.scoreboard th { text-align: left; font-weight: 500; color: var(--muted); font-size: 0.85rem; padding: 0 0 6px; }
+.scoreboard td { padding: 6px 0; border-top: 1px solid var(--line); }
+.scoreboard .num { text-align: right; width: 4.5em; }
+.scoreboard tr.you td { color: var(--accent); }
+.winner .scoreboard { width: 100%; text-align: left; margin: 0; }
+.watching-badge { font-size: 0.85rem; color: var(--muted); }
 .players .bot-level { padding: 2px 6px; min-height: 0; text-transform: capitalize; }
 .settings { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .lobby .actions, .controls .actions { display: flex; gap: 10px; justify-content: flex-end; }
 .lobby .actions .primary { flex: 1; max-width: 240px; }
 
-.segmented { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.segmented { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .segmented button.selected { border-color: var(--accent); background: #f0c24b22; font-weight: 600; }
 
 /* table */
@@ -143,3 +152,15 @@ button.danger { background: var(--danger); border-color: var(--danger); font-wei
   .hand-types { grid-template-columns: repeat(2, 1fr); }
 }
 .table-hint { margin: 10px 0 0; }
+
+/* mia */
+.lives { font-size: 0.9rem; letter-spacing: 1px; min-height: 14px; }
+.mia-dice .die { font-size: 2.2rem; }
+.mia-dice.big .die { font-size: 3.4rem; }
+.mia-values { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 12px 0; }
+.mia-values button { padding: 8px 0; font-variant-numeric: tabular-nums; }
+.mia-values button.selected { border-color: var(--accent); background: #f0c24b22; font-weight: 600; }
+.mia-values button.truth { box-shadow: inset 0 -3px 0 var(--ok); }
+.ok { color: var(--ok); }
+.warn { color: #ffb86b; }
+@media (max-width: 480px) { .mia-values { grid-template-columns: repeat(5, 1fr); } }

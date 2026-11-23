@@ -14,7 +14,7 @@ import {
 } from '../shared/games/liarsPoker'
 import type { RoomView, StateMsg } from '../shared/protocol'
 import type { Run } from './App'
-import { BotTips, Countdown } from './common'
+import { BotTips, Countdown, GameOver, TableHead } from './common'
 
 const RANKS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 const ALL_SUITS: Suit[] = [0, 1, 2, 3]
@@ -96,16 +96,10 @@ export function PokerTable({ state, room, run }: { state: StateMsg; room: RoomVi
   const nameOf = (id: string | null) => room.players.find((p) => p.id === id)?.name ?? '?'
   const me = g.players.find((p) => p.id === state.you)
   const myTurn = g.turnPlayerId === state.you
-  const isHost = room.hostId === state.you
 
   return (
     <div className="table">
-      <div className="table-head">
-        <span>Round {g.round} · {g.totalCards} cards in play · out after {g.config.maxCards}</span>
-        <button className="small-btn" onClick={() => confirm('Leave this game? You will forfeit.') && run({ t: 'room:leave' })}>
-          Leave
-        </button>
-      </div>
+      <TableHead room={room} you={state.you} run={run}>Round {g.round} · {g.totalCards} cards in play · out after {g.config.maxCards}</TableHead>
 
       <ul className="seats">
         {g.players.map((p) => {
@@ -147,14 +141,7 @@ export function PokerTable({ state, room, run }: { state: StateMsg; room: RoomVi
       {g.lastResult && <Reveal result={g.lastResult} view={g} nameOf={nameOf} you={state.you} deadline={room.deadline} />}
 
       {g.phase === 'over' && (
-        <div className="card winner">
-          <div className="big">🏆 {g.winnerId === state.you ? 'You win!' : `${nameOf(g.winnerId)} wins!`}</div>
-          {isHost ? (
-            <button className="primary" onClick={() => run({ t: 'game:backToLobby' })}>Back to lobby</button>
-          ) : (
-            <p className="muted">Waiting for the host to start another game…</p>
-          )}
-        </div>
+        <GameOver winnerId={g.winnerId} room={room} you={state.you} run={run} />
       )}
 
       {me?.hand && me.hand.length > 0 && g.phase === 'bidding' && (

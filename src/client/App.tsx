@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { GAME_NAMES, GAME_TYPES, MAX_PLAYERS, type ClientMsg, type RoomSettings, type RoomView, type StateMsg } from '../shared/protocol'
 import { DiceTable } from './DiceTable'
+import { MiaTable } from './MiaTable'
 import { PokerTable } from './PokerTable'
-import { BotTips, copyText } from './common'
+import { BotTips, Scoreboard, copyText } from './common'
 import { BOT_LEVELS, type BotLevel } from '../shared/games/botStyle'
 import { send, useServerState } from './socket'
 
@@ -42,7 +43,7 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>{state?.room ? GAME_NAMES[state.game?.game ?? state.room.settings.game] : "Liar's Dice & Poker"}</h1>
+        <h1>{state?.room ? GAME_NAMES[state.game?.game ?? state.room.settings.game] : "Liar's Games"}</h1>
         {!connected && <span className="badge warn">Reconnecting…</span>}
       </header>
       {!state ? (
@@ -53,6 +54,8 @@ export function App() {
         <Lobby state={state} room={state.room} run={run} />
       ) : state.game?.game === 'poker' ? (
         <PokerTable state={state} room={state.room} run={run} />
+      ) : state.game?.game === 'mia' ? (
+        <MiaTable state={state} room={state.room} run={run} />
       ) : (
         <DiceTable state={state} room={state.room} run={run} />
       )}
@@ -104,7 +107,9 @@ function Home({ run }: { run: Run }) {
 function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run }) {
   const isHost = room.hostId === state.you
   const me = room.players.find((p) => p.id === state.you)
-  const canStart = room.players.length >= 2 && room.players.every((p) => p.id === room.hostId || p.ready)
+  const seated = room.players.filter((p) => !p.spectator)
+  const watchers = room.players.filter((p) => p.spectator)
+  const canStart = seated.length >= 2 && seated.every((p) => p.id === room.hostId || p.ready)
   const link = `${location.origin}${location.pathname}?room=${room.code}`
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle')
   const linkRef = useRef<HTMLInputElement>(null)
@@ -138,7 +143,7 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
           onFocus={(e) => e.currentTarget.select()}
         />
         <ul className="players">
-          {room.players.map((p) => (
+          {seated.map((p) => (
             <li key={p.id} className={p.connected ? '' : 'away'}>
               <span>
                 {p.name}
@@ -165,13 +170,20 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
             </li>
           ))}
         </ul>
+        {watchers.length > 0 && (
+          <p className="muted small watchers">
+            👀 Watching: {watchers.map((p) => p.name + (p.id === state.you ? ' (you)' : '')).join(', ')}
+          </p>
+        )}
         {isHost && (
-          <button className="add-bot" disabled={room.players.length >= MAX_PLAYERS} onClick={() => run({ t: 'room:addBot', level: 'normal' })}>
+          <button className="add-bot" disabled={seated.length >= MAX_PLAYERS} onClick={() => run({ t: 'room:addBot', level: 'normal' })}>
             + Add bot
           </button>
         )}
         {room.players.some((p) => p.bot) && <BotTips game={room.settings.game} />}
       </div>
+
+      {room.scores.length > 0 && <Scoreboard scores={room.scores} you={state.you} />}
 
       <div className="card">
         <h2>Settings</h2>
@@ -187,7 +199,25 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
               </button>
             ))}
           </div>
-          {room.settings.game === 'dice' ? (
+          {room.settings.game === 'mia' ? (
+            <>
+              <label>
+                Lives
+                <select value={room.settings.mia.lives} onChange={(e) => update({ mia: { lives: Number(e.target.value) } })}>
+                  {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
+              <TimerSelect value={room.settings.turnSeconds} onChange={(turnSeconds) => update({ turnSeconds })} />
+              <div className="option">
+                <p className="hint flush">
+                  Roll two dice in secret and announce a result that beats the last one, truthfully or not. The next
+                  player believes you and rolls to beat it, or calls Liar. Wrong side loses a life. Ranking, low to
+                  high: 31, 32, 41 … 65, then pairs 1-1 … 6-6, then Mia (2-1). Against Mia you can give up (lose 1)
+                  or call, but calling a real Mia costs 2.
+                </p>
+              </div>
+            </>
+          ) : room.settings.game === 'dice' ? (
             <>
               <label>
                 Starting dice
@@ -261,7 +291,14 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
 
       <div className="actions">
         <button onClick={() => run({ t: 'room:leave' })}>Leave</button>
-        {isHost ? (
+        {me?.spectator ? (
+          <button className="primary" disabled={seated.length >= MAX_PLAYERS} onClick={() => run({ t: 'room:spectate', spectator: false })}>
+            {seated.length >= MAX_PLAYERS ? 'No free seats' : 'Take a seat'}
+          </button>
+        ) : (
+          <button onClick={() => run({ t: 'room:spectate', spectator: true })}>Just watch</button>
+        )}
+        {me?.spectator && !isHost ? null : isHost ? (
           <button className="primary" disabled={!canStart} onClick={() => run({ t: 'game:start' })}>
             {room.players.length < 2 ? 'Waiting for players…' : canStart ? 'Start game' : 'Waiting for ready…'}
           </button>

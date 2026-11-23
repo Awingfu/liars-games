@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { isLegalRaise, type Bid, type DiceView, type RoundResult } from '../shared/games/liarsDice'
 import type { RoomView, StateMsg } from '../shared/protocol'
 import type { Run } from './App'
-import { BotTips, Countdown } from './common'
+import { BotTips, Countdown, GameOver, TableHead } from './common'
 
 const FACE_CHARS = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
 
@@ -29,16 +29,10 @@ export function DiceTable({ state, room, run }: { state: StateMsg; room: RoomVie
   const nameOf = (id: string | null) => room.players.find((p) => p.id === id)?.name ?? '?'
   const me = g.players.find((p) => p.id === state.you)
   const myTurn = g.turnPlayerId === state.you
-  const isHost = room.hostId === state.you
 
   return (
     <div className="table">
-      <div className="table-head">
-        <span>Round {g.round} · {g.totalDice} dice in play</span>
-        <button className="small-btn" onClick={() => confirm('Leave this game? You will forfeit.') && run({ t: 'room:leave' })}>
-          Leave
-        </button>
-      </div>
+      <TableHead room={room} you={state.you} run={run}>Round {g.round} · {g.totalDice} dice in play</TableHead>
 
       <ul className="seats">
         {g.players.map((p) => {
@@ -80,14 +74,7 @@ export function DiceTable({ state, room, run }: { state: StateMsg; room: RoomVie
       {g.lastResult && <Reveal result={g.lastResult} view={g} nameOf={nameOf} you={state.you} deadline={room.deadline} />}
 
       {g.phase === 'over' && (
-        <div className="card winner">
-          <div className="big">🏆 {g.winnerId === state.you ? 'You win!' : `${nameOf(g.winnerId)} wins!`}</div>
-          {isHost ? (
-            <button className="primary" onClick={() => run({ t: 'game:backToLobby' })}>Back to lobby</button>
-          ) : (
-            <p className="muted">Waiting for the host to start another game…</p>
-          )}
-        </div>
+        <GameOver winnerId={g.winnerId} room={room} you={state.you} run={run} />
       )}
 
       {me && me.diceCount > 0 && g.phase !== 'over' && (

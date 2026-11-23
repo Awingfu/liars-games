@@ -5,6 +5,8 @@ import { liarsDice } from '../shared/games/liarsDice'
 import { diceBotAction } from '../shared/games/liarsDiceBot'
 import { liarsPoker } from '../shared/games/liarsPoker'
 import { pokerBotAction } from '../shared/games/liarsPokerBot'
+import { mia } from '../shared/games/mia'
+import { miaBotAction } from '../shared/games/miaBot'
 import {
   ACTION_SCHEMAS,
   DEFAULT_SETTINGS,
@@ -13,16 +15,21 @@ import {
   type GameType,
   type RoomSettings,
   type RoomView,
+  type ScoreView,
   type StateMsg,
 } from '../shared/protocol'
 
 /** Rooms hold opaque engine state; each engine only ever sees its own. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyEngine = GameEngine<any, any, any, NonNullable<StateMsg['game']>>
-const ENGINES: Record<GameType, AnyEngine> = { dice: liarsDice, poker: liarsPoker }
+const ENGINES: Record<GameType, AnyEngine> = { dice: liarsDice, poker: liarsPoker, mia }
 /** Bot players for each game, given the bot's own redacted view. Games without one can't have bots. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const BOTS: Partial<Record<GameType, (view: any, me: PlayerId, rng: Rng, level: BotLevel) => unknown>> = { dice: diceBotAction, poker: pokerBotAction }
+const BOTS: Partial<Record<GameType, (view: any, me: PlayerId, rng: Rng, level: BotLevel) => unknown>> = {
+  dice: diceBotAction,
+  poker: pokerBotAction,
+  mia: miaBotAction,
+}
 
 /** How long a bot "thinks" before moving, so humans can follow along. */
 const BOT_DELAY_MS = [1200, 2400] as const
@@ -31,6 +38,8 @@ const REVEAL_MS = 5000
 /** Turn limit used for a disconnected player when the room has no timer. */
 const DISCONNECTED_TURN_MS = 60_000
 const ABANDONED_ROOM_MS = 10 * 60_000
+/** Players plus spectators. */
+const MAX_MEMBERS = 20
 
 export const cryptoRng: Rng = { int: (max) => randomInt(max) }
 
@@ -42,6 +51,8 @@ interface RoomPlayer {
   left: boolean
   /** A bot's difficulty; null for humans. */
   bot: BotLevel | null
+  /** Watching instead of playing. */
+  spectator: boolean
 }
 
 interface Room {
@@ -56,6 +67,11 @@ interface Room {
   deadline: number | null
   timer: NodeJS.Timeout | null
   emptySince: number | null
+  /** Who is seated in the current game, in seat order. */
+  seats: PlayerId[]
+  /** Whether the current game's result has been added to `scores`. */
+  scored: boolean
+  scores: Map<PlayerId, ScoreView>
 }
 
 export class RoomError extends Error {}
@@ -92,8 +108,9 @@ export class RoomManager {
       code: room.code,
       hostId: room.hostId,
       status: room.status,
-      players: room.players.map(({ id, name, connected, ready, left, bot }) => ({ id, name, connected, ready, left, bot })),
+      players: room.players.map(({ id, name, connected, ready, left, bot, spectator }) => ({ id, name, connected, ready, left, bot, spectator })),
       settings: room.settings,
+      scores: [...room.scores.values()].sort((a, b) => b.wins - a.wins || a.games - b.games || a.name.localeCompare(b.name)),
       deadline: room.deadline,
     }
     return { you: playerId, room: view, game: room.state ? this.engine(room).viewFor(room.state, playerId) : null }
@@ -110,13 +127,16 @@ export class RoomManager {
       code,
       hostId: playerId,
       status: 'lobby',
-      players: [{ id: playerId, name, connected: true, ready: false, left: false, bot: null }],
+      players: [{ id: playerId, name, connected: true, ready: false, left: false, bot: null, spectator: false }],
       settings: structuredClone(DEFAULT_SETTINGS),
       playing: null,
       state: null,
       deadline: null,
       timer: null,
       emptySince: null,
+      seats: [],
+      scored: false,
+      scores: new Map(),
     }
     this.rooms.set(code, room)
     this.roomOf.set(playerId, code)
@@ -127,6 +147,7 @@ export class RoomManager {
    * Join a room. Returns the player id the caller now plays as: normally their
    * own, but joining with the name of a disconnected seat reclaims that seat
    * (e.g. after a phone browser dropped the tab), so the caller must switch ids.
+   * Joining mid-game, or a full lobby, makes you a spectator.
    */
   join(playerId: PlayerId, code: string, name: string): PlayerId {
     const room = this.rooms.get(code) ?? fail('Room not found')
@@ -142,11 +163,11 @@ export class RoomManager {
       existing.connected = true
       if (room.status === 'lobby' && !nameTaken) existing.name = name
     } else {
-      if (room.status !== 'lobby') fail('Game already in progress')
-      if (room.players.length >= MAX_PLAYERS) fail('Room is full')
+      if (room.players.filter((p) => !p.left).length >= MAX_MEMBERS) fail('Room is full')
       if (nameTaken) fail(`Someone in this room is already called "${name}". Pick another name.`)
       this.leave(playerId)
-      room.players.push({ id: playerId, name, connected: true, ready: false, left: false, bot: null })
+      const spectator = room.status !== 'lobby' || this.seated(room).length >= MAX_PLAYERS
+      room.players.push({ id: playerId, name, connected: true, ready: false, left: false, bot: null, spectator })
       this.roomOf.set(playerId, code)
     }
     room.emptySince = null
@@ -158,7 +179,8 @@ export class RoomManager {
     const room = this.findRoom(playerId)
     if (!room) return
     this.roomOf.delete(playerId)
-    if (room.status === 'lobby') {
+    const leaver = room.players.find((p) => p.id === playerId)!
+    if (room.status === 'lobby' || leaver.spectator) {
       room.players = room.players.filter((p) => p.id !== playerId)
     } else {
       const p = room.players.find((p) => p.id === playerId)!
@@ -168,7 +190,8 @@ export class RoomManager {
       this.schedule(room)
     }
     if (room.hostId === playerId) {
-      const next = room.players.find((p) => !p.left && !p.bot)
+      const humans = room.players.filter((p) => !p.left && !p.bot)
+      const next = humans.find((p) => !p.spectator) ?? humans[0]
       if (next) room.hostId = next.id
     }
     this.send(playerId, { you: playerId, room: null, game: null })
@@ -187,13 +210,13 @@ export class RoomManager {
   addBot(playerId: PlayerId, level: BotLevel = 'normal') {
     const room = this.hostRoom(playerId)
     if (room.status !== 'lobby') fail('Game already started')
-    if (room.players.length >= MAX_PLAYERS) fail('Room is full')
+    if (this.seated(room).length >= MAX_PLAYERS) fail('Room is full')
     let n = 1
     while (room.players.some((p) => sameName(p.name, `Bot ${n}`))) n++
     let id: PlayerId
     do id = `bot-${randomInt(1e9).toString(36)}`
     while (room.players.some((p) => p.id === id))
-    room.players.push({ id, name: `Bot ${n}`, connected: true, ready: true, left: false, bot: level })
+    room.players.push({ id, name: `Bot ${n}`, connected: true, ready: true, left: false, bot: level, spectator: false })
     this.broadcast(room)
   }
 
@@ -213,6 +236,17 @@ export class RoomManager {
     this.broadcast(room)
   }
 
+  /** In the lobby, sit out the next game to watch, or take a free seat. */
+  setSpectator(playerId: PlayerId, spectator: boolean) {
+    const room = this.findRoom(playerId) ?? fail('Not in a room')
+    if (room.status !== 'lobby') fail('Game already started')
+    const p = room.players.find((p) => p.id === playerId)!
+    if (!spectator && p.spectator && this.seated(room).length >= MAX_PLAYERS) fail('No free seats')
+    p.spectator = spectator
+    p.ready = false
+    this.broadcast(room)
+  }
+
   setReady(playerId: PlayerId, ready: boolean) {
     const room = this.findRoom(playerId) ?? fail('Not in a room')
     if (room.status !== 'lobby') fail('Game already started')
@@ -223,23 +257,26 @@ export class RoomManager {
   start(playerId: PlayerId) {
     const room = this.hostRoom(playerId)
     if (room.status !== 'lobby') fail('Game already started')
-    if (room.players.length < 2) fail('Need at least 2 players')
-    if (room.players.some((p) => p.id !== room.hostId && !p.ready)) fail('Everyone must be ready')
+    const seated = this.seated(room)
+    if (seated.length < 2) fail('Need at least 2 players')
+    if (seated.some((p) => p.id !== room.hostId && !p.ready)) fail('Everyone must be ready')
     const game = room.settings.game
     const engine = ENGINES[game]
     const config = room.settings[game]
-    if (room.players.some((p) => p.bot) && !BOTS[game]) fail(`Bots can't play ${GAME_NAMES[game]} yet`)
-    const problem = engine.canStart?.(room.players.length, config)
+    if (seated.some((p) => p.bot) && !BOTS[game]) fail(`Bots can't play ${GAME_NAMES[game]} yet`)
+    const problem = engine.canStart?.(seated.length, config)
     if (problem) fail(problem)
     room.status = 'playing'
     room.playing = game
-    const seats = room.players.map((p) => p.id)
+    const seats = seated.map((p) => p.id)
     if (room.settings.shuffleSeats)
       for (let i = seats.length - 1; i > 0; i--) {
         const j = this.rng.int(i + 1)
         ;[seats[i], seats[j]] = [seats[j]!, seats[i]!]
       }
     room.state = engine.init(seats, config, this.rng)
+    room.seats = seats
+    room.scored = false
     this.schedule(room)
     this.broadcast(room)
   }
@@ -252,7 +289,11 @@ export class RoomManager {
     room.playing = null
     room.state = null
     room.players = room.players.filter((p) => !p.left)
+    // Spectators take any free seats, in the order they arrived.
+    let free = MAX_PLAYERS - this.seated(room).length
+    for (const p of room.players) if (p.spectator && free > 0) { p.spectator = false; free-- }
     for (const p of room.players) p.ready = !!p.bot
+    room.seats = []
     this.broadcast(room)
   }
 
@@ -301,6 +342,7 @@ export class RoomManager {
     if (!s) return
     const engine = this.engine(room)
     const phase = engine.phase(s)
+    if (phase === 'over') this.recordResult(room)
     if (phase === 'reveal') {
       room.deadline = Date.now() + REVEAL_MS
       room.timer = setTimeout(() => {
@@ -337,6 +379,25 @@ export class RoomManager {
       this.schedule(room)
       this.broadcast(room)
     }, lo + this.rng.int(hi - lo))
+  }
+
+  /** Add a finished game to the room's scoreboard, once. */
+  private recordResult(room: Room) {
+    if (room.scored) return
+    room.scored = true
+    const view = this.engine(room).viewFor(room.state, '') as { winnerId: PlayerId | null }
+    for (const id of room.seats) {
+      const name = room.players.find((p) => p.id === id)?.name ?? room.scores.get(id)?.name ?? '?'
+      const score = room.scores.get(id) ?? { id, name, wins: 0, games: 0 }
+      score.name = name
+      score.games++
+      if (id === view.winnerId) score.wins++
+      room.scores.set(id, score)
+    }
+  }
+
+  private seated(room: Room) {
+    return room.players.filter((p) => !p.spectator && !p.left)
   }
 
   private clearTimer(room: Room) {

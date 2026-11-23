@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { PlayerId } from './engine'
 import { BOT_LEVELS, type BotLevel } from './games/botStyle'
 import type { DiceView } from './games/liarsDice'
+import type { MiaView } from './games/mia'
 import type { PokerView } from './games/liarsPoker'
 
 export const MAX_PLAYERS = 8
@@ -19,14 +20,19 @@ export const PokerConfigSchema = z.object({
   maxCards: z.number().int().min(1).max(10),
 })
 
-export const GAME_TYPES = ['dice', 'poker'] as const
+export const MiaConfigSchema = z.object({
+  lives: z.number().int().min(1).max(6),
+})
+
+export const GAME_TYPES = ['dice', 'poker', 'mia'] as const
 export type GameType = (typeof GAME_TYPES)[number]
-export const GAME_NAMES: Record<GameType, string> = { dice: "Liar's Dice", poker: "Liar's Poker" }
+export const GAME_NAMES: Record<GameType, string> = { dice: "Liar's Dice", poker: "Liar's Poker", mia: 'Mia' }
 
 export const RoomSettingsSchema = z.object({
   game: z.enum(GAME_TYPES),
   dice: DiceConfigSchema,
   poker: PokerConfigSchema,
+  mia: MiaConfigSchema.default({ lives: 3 }),
   /** 0 = no turn timer. */
   turnSeconds: z.number().int().min(0).max(300),
   /** Randomize seating order when the game starts. */
@@ -60,9 +66,16 @@ export const PokerActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('call') }),
 ])
 
+export const MiaActionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('roll') }),
+  z.object({ type: z.literal('claim'), value: z.number().int() }),
+  z.object({ type: z.literal('call') }),
+  z.object({ type: z.literal('giveUp') }),
+])
+
 /** `game:action` payloads are validated against the schema of the game being played. */
-export const ACTION_SCHEMAS = { dice: DiceActionSchema, poker: PokerActionSchema } satisfies Record<GameType, z.ZodTypeAny>
-export type GameAction = z.infer<typeof DiceActionSchema> | z.infer<typeof PokerActionSchema>
+export const ACTION_SCHEMAS = { dice: DiceActionSchema, poker: PokerActionSchema, mia: MiaActionSchema } satisfies Record<GameType, z.ZodTypeAny>
+export type GameAction = z.infer<typeof DiceActionSchema> | z.infer<typeof PokerActionSchema> | z.infer<typeof MiaActionSchema>
 
 /** Every client → server message, sent on the `c2s` event with an ack callback. */
 export const ClientMsg = z.discriminatedUnion('t', [
@@ -71,6 +84,7 @@ export const ClientMsg = z.discriminatedUnion('t', [
   z.object({ t: z.literal('room:leave') }),
   z.object({ t: z.literal('room:settings'), settings: RoomSettingsSchema }),
   z.object({ t: z.literal('room:ready'), ready: z.boolean() }),
+  z.object({ t: z.literal('room:spectate'), spectator: z.boolean() }),
   z.object({ t: z.literal('room:addBot'), level: z.enum(BOT_LEVELS).default('normal') }),
   z.object({ t: z.literal('room:removeBot'), id: z.string().max(40) }),
   z.object({ t: z.literal('room:botLevel'), id: z.string().max(40), level: z.enum(BOT_LEVELS) }),
@@ -90,6 +104,15 @@ export interface RoomPlayerView {
   left: boolean
   /** A bot's difficulty; null for humans. */
   bot: BotLevel | null
+  /** Watching, not playing: joined mid-game or the room was full. Takes a seat at the next game if there's room. */
+  spectator: boolean
+}
+
+export interface ScoreView {
+  id: PlayerId
+  name: string
+  wins: number
+  games: number
 }
 
 export interface RoomView {
@@ -98,6 +121,8 @@ export interface RoomView {
   status: 'lobby' | 'playing'
   players: RoomPlayerView[]
   settings: RoomSettings
+  /** Wins this room, best first; everyone who has played a game here. */
+  scores: ScoreView[]
   /** Epoch ms when the current turn auto-plays, or when the reveal pause ends and the next round deals. */
   deadline: number | null
 }
@@ -106,7 +131,7 @@ export interface RoomView {
 export interface StateMsg {
   you: PlayerId
   room: RoomView | null
-  game: DiceView | PokerView | null
+  game: DiceView | PokerView | MiaView | null
 }
 
 /** Server → client `session` event, sent on connect. */
@@ -119,6 +144,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   game: 'dice',
   dice: { startingDice: 5, onesWild: false, spotOn: true },
   poker: { startingCards: 1, maxCards: 5 },
+  mia: { lives: 3 },
   turnSeconds: 45,
   shuffleSeats: false,
 }
