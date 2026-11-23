@@ -35,6 +35,10 @@ input, select {
   font: inherit; color: var(--text); background: var(--felt); border: 1px solid var(--line);
   border-radius: 8px; padding: 10px 12px; min-width: 0;
 }
+select {
+  appearance: none; -webkit-appearance: none; padding-right: 36px; cursor: pointer;
+  background: var(--felt) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%239bb8a8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;
+}
 .code-input { flex: 1; text-transform: uppercase; letter-spacing: 0.2em; font-weight: 600; }
 button {
   font: inherit; color: var(--text); background: var(--felt); border: 1px solid var(--line);
@@ -73,7 +77,7 @@ button.danger { background: var(--danger); border-color: var(--danger); font-wei
 .scoreboard tr.you td { color: var(--accent); }
 .winner .scoreboard { width: 100%; text-align: left; margin: 0; }
 .watching-badge { font-size: 0.85rem; color: var(--muted); }
-.players .bot-level { padding: 2px 6px; min-height: 0; text-transform: capitalize; }
+.players .bot-level { padding: 2px 26px 2px 8px; background-position: right 8px center; min-height: 0; text-transform: capitalize; }
 .settings { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .lobby .actions, .controls .actions { display: flex; gap: 10px; justify-content: flex-end; }
 .lobby .actions .primary { flex: 1; max-width: 240px; }
