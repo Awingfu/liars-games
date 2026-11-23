@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { RoomView, ScoreView } from '../shared/protocol'
+import { pct } from '../shared/odds'
 import type { Run } from './App'
 
 export function Countdown({ deadline, urgentAt = 5 }: { deadline: number; urgentAt?: number }) {
@@ -115,7 +116,7 @@ export function TableHead({ children, room, you, run }: { children: ReactNode; r
     <div className="table-head">
       <span>{children}</span>
       <span className="row">
-        {watching && <span className="watching-badge">👀 Watching · you'll play next game</span>}
+        {watching && <span className="watching-badge">Watching · you'll play next game</span>}
         <button
           className="small-btn"
           onClick={() => (watching || confirm('Leave this game? You will forfeit.')) && run({ t: 'room:leave' })}
@@ -129,7 +130,7 @@ export function TableHead({ children, room, you, run }: { children: ReactNode; r
 
 /** Winner banner, the room's scoreboard, and the host's way back to the lobby. */
 export function GameOver({ winnerId, room, you, run }: { winnerId: string | null; room: RoomView; you: string; run: Run }) {
-  const name = room.players.find((p) => p.id === winnerId)?.name ?? room.scores.find((s) => s.id === winnerId)?.name ?? '?'
+  const name = displayName(room, winnerId)
   return (
     <div className="card winner">
       <div className="big">🏆 {winnerId === you ? 'You win!' : `${name} wins!`}</div>
@@ -138,6 +139,34 @@ export function GameOver({ winnerId, room, you, run }: { winnerId: string | null
         <button className="primary" onClick={() => run({ t: 'game:backToLobby' })}>Back to lobby</button>
       ) : (
         <p className="muted">Waiting for the host to start another game…</p>
+      )}
+    </div>
+  )
+}
+
+/** A player's name as shown at the table; bots carry their level, e.g. "Bot 1 (Hard)". */
+export function displayName(room: RoomView, id: string | null): string {
+  const p = room.players.find((p) => p.id === id)
+  if (!p) return room.scores.find((s) => s.id === id)?.name ?? '?'
+  return p.bot ? `${p.name} (${p.bot[0]!.toUpperCase()}${p.bot.slice(1)})` : p.name
+}
+
+/** Whether the room has EZ mode on (a lobby setting, the same for everyone). Provided by App around the table. */
+export const EzContext = createContext(false)
+export const useEzMode = () => useContext(EzContext)
+
+/** Shown at the table while EZ mode is on, so nobody's surprised everyone can see the odds. */
+export function EzNote() {
+  return useEzMode() ? <p className="ez-note">EZ mode is on: everyone sees the odds</p> : null
+}
+
+/** "Chance it's true: blind 34% · with your hand 61%". Omit `withHand` when you hold nothing relevant. */
+export function OddsLine({ label = "Chance it's true", blind, withHand }: { label?: string; blind: number; withHand?: number }) {
+  return (
+    <div className="odds">
+      {label}: <span title="Treating every die or card as unseen">blind <strong>{pct(blind)}</strong></span>
+      {withHand !== undefined && (
+        <> · <span title="Counting what you hold">with your hand <strong>{pct(withHand)}</strong></span></>
       )}
     </div>
   )

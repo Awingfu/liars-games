@@ -3,8 +3,9 @@ import { GAME_NAMES, GAME_TYPES, MAX_PLAYERS, type ClientMsg, type RoomSettings,
 import { DiceTable } from './DiceTable'
 import { MiaTable } from './MiaTable'
 import { PokerTable } from './PokerTable'
-import { BotTips, Scoreboard, copyText } from './common'
+import { BotTips, EzContext, Scoreboard, copyText } from './common'
 import { BOT_LEVELS, type BotLevel } from '../shared/games/botStyle'
+import { decksFor } from '../shared/games/liarsPoker'
 import { send, useServerState } from './socket'
 
 export type Run = (msg: ClientMsg) => Promise<boolean>
@@ -52,12 +53,16 @@ export function App() {
         <Home run={run} />
       ) : state.room.status === 'lobby' ? (
         <Lobby state={state} room={state.room} run={run} />
-      ) : state.game?.game === 'poker' ? (
-        <PokerTable state={state} room={state.room} run={run} />
-      ) : state.game?.game === 'mia' ? (
-        <MiaTable state={state} room={state.room} run={run} />
       ) : (
-        <DiceTable state={state} room={state.room} run={run} />
+        <EzContext.Provider value={state.room.settings.ezMode}>
+          {state.game?.game === 'poker' ? (
+            <PokerTable state={state} room={state.room} run={run} />
+          ) : state.game?.game === 'mia' ? (
+            <MiaTable state={state} room={state.room} run={run} />
+          ) : (
+            <DiceTable state={state} room={state.room} run={run} />
+          )}
+        </EzContext.Provider>
       )}
       {error && <div className="toast" role="alert">{error}</div>}
     </div>
@@ -172,7 +177,7 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
         </ul>
         {watchers.length > 0 && (
           <p className="muted small watchers">
-            👀 Watching: {watchers.map((p) => p.name + (p.id === state.you ? ' (you)' : '')).join(', ')}
+            Watching: {watchers.map((p) => p.name + (p.id === state.you ? ' (you)' : '')).join(', ')}
           </p>
         )}
         {isHost && (
@@ -276,6 +281,15 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
                 </select>
               </label>
               <TimerSelect value={room.settings.turnSeconds} onChange={(turnSeconds) => update({ turnSeconds })} />
+              {decksFor(seated.length, poker.maxCards) > 1 && (
+                <div className="option">
+                  <p className="hint flush two-decks-note">
+                    🂠🂠 <strong>2 decks in play.</strong> {seated.length} players × up to {poker.maxCards} cards ={' '}
+                    {seated.length * poker.maxCards}, more than one deck's 52, so two decks are shuffled together.
+                    Duplicate cards like two A♠ can turn up, and they count: two A♠ make a pair of aces.
+                  </p>
+                </div>
+              )}
             </>
           )}
           <div className="option">
@@ -284,6 +298,17 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
               Shuffle seating order
             </label>
             <p className="hint">Randomize who sits next to whom when the game starts, instead of using join order.</p>
+          </div>
+          <div className="option">
+            <label className="check">
+              <input type="checkbox" checked={room.settings.ezMode} onChange={(e) => update({ ezMode: e.target.checked })} />
+              EZ mode: show odds to everyone
+            </label>
+            <p className="hint">
+              {room.settings.game === 'mia'
+                ? 'Everyone sees the chance a fair roll reaches the current announcement, and the one they are about to make.'
+                : 'Everyone sees the chance the current bid, and the bid they are building, is true: blind (every die or card unseen) and with their own hand.'}
+            </p>
           </div>
         </fieldset>
         {!isHost && <p className="muted small">Only the host can change settings.</p>}

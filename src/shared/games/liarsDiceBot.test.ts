@@ -68,3 +68,11 @@ describe('dice bot', () => {
     }
   })
 })
+
+describe('dice bot never calls a bid its own dice prove', () => {
+  it.each(BOT_LEVELS)('%s', (level) => {
+    // Holding three 6s against a bid of 3×6: calling is a sure loss, so it must raise.
+    for (let seed = 1; seed <= 50; seed++)
+      expect(diceBotAction(view([6, 6, 6], 2, { qty: 3, face: 6, by: 'x' }), 'me', seededRng(seed), level).type).toBe('bid')
+  })
+})

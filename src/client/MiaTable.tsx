@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { MIA, MIA_VALUES, describeMia, miaDice, miaRank, nextAbove, type MiaAction, type MiaResult, type MiaView } from '../shared/games/mia'
 import type { RoomView, StateMsg } from '../shared/protocol'
 import type { Run } from './App'
-import { BotTips, Countdown, GameOver, TableHead } from './common'
+import { miaOdds } from '../shared/odds'
+import { BotTips, Countdown, EzNote, GameOver, OddsLine, TableHead, displayName, useEzMode } from './common'
 
 const FACE_CHARS = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
 
@@ -20,7 +21,7 @@ const label = (v: number) => (v === MIA ? 'Mia (2-1)' : describeMia(v))
 
 export function MiaTable({ state, room, run }: { state: StateMsg; room: RoomView; run: Run }) {
   const g = state.game as MiaView
-  const nameOf = (id: string | null) => room.players.find((p) => p.id === id)?.name ?? '?'
+  const nameOf = (id: string | null) => displayName(room, id)
   const myTurn = g.turnPlayerId === state.you
   const alive = g.players.filter((p) => p.lives > 0).length
 
@@ -53,6 +54,7 @@ export function MiaTable({ state, room, run }: { state: StateMsg; room: RoomView
           <>
             <div className="muted small">{nameOf(g.claim.by)} announces</div>
             <div className="big">{label(g.claim.value)}</div>
+            {g.phase === 'bidding' && <MiaOdds value={g.claim.value} />}
           </>
         ) : g.phase === 'bidding' ? (
           <div className="muted">{myTurn ? 'You roll first' : `${nameOf(g.turnPlayerId)} rolls first`}</div>
@@ -70,6 +72,7 @@ export function MiaTable({ state, room, run }: { state: StateMsg; room: RoomView
           </div>
         )}
       </div>
+      {g.phase === 'bidding' && <EzNote />}
 
       {g.lastResult && <Reveal result={g.lastResult} phase={g.phase} nameOf={nameOf} you={state.you} deadline={room.deadline} />}
 
@@ -143,6 +146,7 @@ function Announce({ rolled, claim, act }: { rolled: number; claim: number | null
           </button>
         ))}
       </div>
+      <MiaOdds value={pick} label="Chance a fair roll is at least this" />
       <div className="row actions">
         <button className="primary" onClick={() => act({ type: 'claim', value: pick })}>
           Announce {label(pick)}{pick === rolled ? ' (true)' : ''}
@@ -150,6 +154,12 @@ function Announce({ rolled, claim, act }: { rolled: number; claim: number | null
       </div>
     </div>
   )
+}
+
+/** EZ mode odds in Mia: nobody holds anything when judging a claim, so only the fair-roll chance applies. */
+function MiaOdds({ value, label = 'Chance a fair roll is at least this' }: { value: number; label?: string }) {
+  const ez = useEzMode()
+  return ez ? <OddsLine label={label} blind={miaOdds(value)} /> : null
 }
 
 function Reveal({ result: r, phase, nameOf, you, deadline }: { result: MiaResult; phase: MiaView['phase']; nameOf: (id: string) => string; you: string; deadline: number | null }) {

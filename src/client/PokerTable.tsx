@@ -14,7 +14,8 @@ import {
 } from '../shared/games/liarsPoker'
 import type { RoomView, StateMsg } from '../shared/protocol'
 import type { Run } from './App'
-import { BotTips, Countdown, GameOver, TableHead } from './common'
+import { pokerOdds } from '../shared/odds'
+import { BotTips, Countdown, EzNote, GameOver, OddsLine, TableHead, displayName, useEzMode } from './common'
 
 const RANKS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 const ALL_SUITS: Suit[] = [0, 1, 2, 3]
@@ -93,13 +94,16 @@ function relevant(c: Claim, card: Card): boolean {
 
 export function PokerTable({ state, room, run }: { state: StateMsg; room: RoomView; run: Run }) {
   const g = state.game as PokerView
-  const nameOf = (id: string | null) => room.players.find((p) => p.id === id)?.name ?? '?'
+  const nameOf = (id: string | null) => displayName(room, id)
   const me = g.players.find((p) => p.id === state.you)
   const myTurn = g.turnPlayerId === state.you
 
   return (
     <div className="table">
-      <TableHead room={room} you={state.you} run={run}>Round {g.round} · {g.totalCards} cards in play · out after {g.config.maxCards}</TableHead>
+      <TableHead room={room} you={state.you} run={run}>
+        Round {g.round} · {g.totalCards} cards in play · out after {g.config.maxCards}
+        {g.decks > 1 && <> · <span className="two-decks" title="Two decks are shuffled together, so duplicate cards (like two A♠) can appear">🂠🂠 2 decks</span></>}
+      </TableHead>
 
       <ul className="seats">
         {g.players.map((p) => {
@@ -126,6 +130,7 @@ export function PokerTable({ state, room, run }: { state: StateMsg; room: RoomVi
           <>
             <div className="muted small">{nameOf(g.bid.by)} says there's</div>
             <div className="big">{describeClaim(g.bid.claim)}</div>
+            {g.phase === 'bidding' && <PokerOdds view={g} you={state.you} claim={g.bid.claim} />}
           </>
         ) : g.phase === 'bidding' ? (
           <div className="muted">{myTurn ? 'You open the bidding' : `${nameOf(g.turnPlayerId)} opens the bidding`}</div>
@@ -137,6 +142,7 @@ export function PokerTable({ state, room, run }: { state: StateMsg; room: RoomVi
           </div>
         )}
       </div>
+      {g.phase === 'bidding' && <EzNote />}
 
       {g.lastResult && <Reveal result={g.lastResult} view={g} nameOf={nameOf} you={state.you} deadline={room.deadline} />}
 
@@ -151,7 +157,7 @@ export function PokerTable({ state, room, run }: { state: StateMsg; room: RoomVi
         </div>
       )}
 
-      {myTurn && <ClaimPicker view={g} run={run} />}
+      {myTurn && <ClaimPicker view={g} you={state.you} run={run} />}
 
       {g.history.length > 0 && g.phase === 'bidding' && (
         <details className="history">
@@ -165,7 +171,7 @@ export function PokerTable({ state, room, run }: { state: StateMsg; room: RoomVi
   )
 }
 
-function ClaimPicker({ view: g, run }: { view: PokerView; run: Run }) {
+function ClaimPicker({ view: g, you, run }: { view: PokerView; you: string; run: Run }) {
   const current = g.bid?.claim ?? null
   // Server sends a fresh object each update; key the default on its content.
   const currentKey = JSON.stringify(current)
@@ -217,6 +223,7 @@ function ClaimPicker({ view: g, run }: { view: PokerView; run: Run }) {
           </div>
         )
       })}
+      {!problem && <PokerOdds view={g} you={you} claim={claim} label="Chance your bid is true" />}
       <div className="row actions">
         <button className="primary" disabled={!!problem} onClick={() => run({ t: 'game:action', action: { type: 'bid', claim } })}>
           {problem ?? `Bid ${describeClaim(claim)}`}
@@ -225,6 +232,18 @@ function ClaimPicker({ view: g, run }: { view: PokerView; run: Run }) {
       </div>
     </div>
   )
+}
+
+/** EZ mode odds for a poker claim, by simulation: blind, and counting your own cards if you're playing. */
+function PokerOdds({ view, you, claim, label }: { view: PokerView; you: string; claim: Claim; label?: string }) {
+  const ez = useEzMode()
+  const hand = view.players.find((p) => p.id === you)?.hand
+  const key = `${JSON.stringify(claim)}|${JSON.stringify(hand)}|${view.totalCards}|${view.decks}`
+  const odds = useMemo(
+    () => (ez ? { blind: pokerOdds(view, you, claim, false), withHand: hand?.length ? pokerOdds(view, you, claim, true) : undefined } : null),
+    [ez, key], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  return odds && <OddsLine label={label} blind={odds.blind} withHand={odds.withHand} />
 }
 
 function Reveal({ result: r, view: g, nameOf, you, deadline }: { result: PokerRoundResult; view: PokerView; nameOf: (id: string) => string; you: string; deadline: number | null }) {

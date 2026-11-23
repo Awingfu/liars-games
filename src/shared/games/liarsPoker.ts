@@ -19,9 +19,16 @@ export const cardName = (c: Card) => `${rankName(c.rank)}${SUITS[c.suit]}`
 const isRank = (r: unknown): r is Rank => Number.isInteger(r) && (r as number) >= 2 && (r as number) <= 14
 const isSuit = (s: unknown): s is Suit => s === 0 || s === 1 || s === 2 || s === 3
 
-function shuffledDeck(rng: Rng): Card[] {
+/** Full deck(s), unshuffled. With two decks every card appears twice. */
+export function fullDeck(decks = 1): Card[] {
   const deck: Card[] = []
-  for (let suit = 0; suit < 4; suit++) for (let rank = 2; rank <= 14; rank++) deck.push({ rank, suit: suit as Suit })
+  for (let d = 0; d < decks; d++)
+    for (let suit = 0; suit < 4; suit++) for (let rank = 2; rank <= 14; rank++) deck.push({ rank, suit: suit as Suit })
+  return deck
+}
+
+function shuffledDeck(rng: Rng, decks: number): Card[] {
+  const deck = fullDeck(decks)
   for (let i = deck.length - 1; i > 0; i--) {
     const j = rng.int(i + 1)
     ;[deck[i], deck[j]] = [deck[j]!, deck[i]!]
@@ -181,6 +188,8 @@ interface PokerPlayer {
 
 export interface PokerState {
   config: PokerConfig
+  /** 1, or 2 when one deck can't cover everyone at the max card count. */
+  decks: number
   players: PokerPlayer[]
   round: number
   phase: 'bidding' | 'reveal' | 'over'
@@ -197,6 +206,7 @@ export interface PokerView {
   phase: PokerState['phase']
   round: number
   config: PokerConfig
+  decks: number
   players: { id: PlayerId; cardCount: number; hand: Card[] | null }[]
   totalCards: number
   turnPlayerId: PlayerId | null
@@ -207,6 +217,10 @@ export interface PokerView {
 }
 
 const DECK_SIZE = 52
+const MAX_DECKS = 2
+
+/** Decks needed so everyone can hold the max: two once one deck isn't enough. */
+export const decksFor = (playerCount: number, maxCards: number) => (playerCount * maxCards > DECK_SIZE ? 2 : 1)
 const alive = (p: PokerPlayer) => p.cardCount > 0
 
 function nextAliveIndex(players: PokerPlayer[], from: number): number {
@@ -217,8 +231,8 @@ function nextAliveIndex(players: PokerPlayer[], from: number): number {
   return from
 }
 
-function deal(players: PokerPlayer[], rng: Rng): PokerPlayer[] {
-  const deck = shuffledDeck(rng)
+function deal(players: PokerPlayer[], rng: Rng, decks: number): PokerPlayer[] {
+  const deck = shuffledDeck(rng, decks)
   return players.map((p) => ({ ...p, hand: sortHand(deck.splice(0, p.cardCount)) }))
 }
 
@@ -230,14 +244,17 @@ export const liarsPoker: GameEngine<PokerState, PokerAction, PokerConfig, PokerV
 
   canStart(playerCount, { startingCards, maxCards }) {
     if (startingCards < 1 || startingCards > maxCards) return 'Starting cards must be between 1 and the max'
-    if (playerCount * maxCards > DECK_SIZE) return `Too many players for ${maxCards} max cards (deck has ${DECK_SIZE})`
+    if (playerCount * maxCards > DECK_SIZE * MAX_DECKS)
+      return `Too many players for ${maxCards} max cards (two decks have ${DECK_SIZE * MAX_DECKS})`
     return null
   },
 
   init(playerIds, config, rng) {
-    const players = deal(playerIds.map((id) => ({ id, cardCount: config.startingCards, hand: [] })), rng)
+    const decks = decksFor(playerIds.length, config.maxCards)
+    const players = deal(playerIds.map((id) => ({ id, cardCount: config.startingCards, hand: [] })), rng, decks)
     return {
       config,
+      decks,
       players,
       round: 1,
       phase: 'bidding',
@@ -291,7 +308,7 @@ export const liarsPoker: GameEngine<PokerState, PokerAction, PokerConfig, PokerV
 
   nextRound(s, rng) {
     if (s.phase !== 'reveal') return s
-    const players = deal(s.players, rng)
+    const players = deal(s.players, rng, s.decks)
     const idx = players.findIndex((p) => p.id === s.nextStarter)
     return {
       ...s,
@@ -338,6 +355,7 @@ export const liarsPoker: GameEngine<PokerState, PokerAction, PokerConfig, PokerV
       phase: s.phase,
       round: s.round,
       config: s.config,
+      decks: s.decks,
       players: s.players.map((p) => ({
         id: p.id,
         cardCount: p.cardCount,

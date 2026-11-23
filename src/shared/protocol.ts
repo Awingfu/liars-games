@@ -37,6 +37,8 @@ export const RoomSettingsSchema = z.object({
   turnSeconds: z.number().int().min(0).max(300),
   /** Randomize seating order when the game starts. */
   shuffleSeats: z.boolean().default(false),
+  /** Show bid odds to everyone at the table. */
+  ezMode: z.boolean().default(false),
 })
 export type RoomSettings = z.infer<typeof RoomSettingsSchema>
 
@@ -147,4 +149,5 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   mia: { lives: 3 },
   turnSeconds: 45,
   shuffleSeats: false,
+  ezMode: false,
 }

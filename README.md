@@ -59,7 +59,8 @@ with that game's schema from `ACTION_SCHEMAS`.
 - **Liar's Dice** (`liarsDice.ts`): bid quantity × face across all dice; options for wild 1s and "spot on".
 - **Liar's Poker** (`liarsPoker.ts`, card version): bid a poker hand that exists in everyone's cards combined.
   Raises must be strictly higher (category, then ranks, then suit ♣<♦<♥<♠). Loser of a call is dealt one more
-  card next round and is out past the max.
+  card next round and is out past the max. If players × max cards is over 52, two decks are shuffled together
+  (the lobby and table say so); duplicates like two A♠ can appear and count toward claims. Up to 104 cards.
 - **Mia** (`mia.ts`): roll two dice in secret and announce a value that beats the last one, truthfully or not.
   The next player believes it (rolls and must beat it) or calls Liar; whoever is wrong loses a life. Values read
   high die first; ranking low to high is 31 … 65, then pairs 11 … 66, then Mia (21). Against Mia you can give up
@@ -79,9 +80,15 @@ To add another game: implement `GameEngine`, add its config/action schemas to `p
   shown in the lobby and on the game-over card. A game counts once when it ends, for everyone seated at the start,
   including players who forfeited.
 
+- **EZ mode.** A lobby setting (off by default) that shows everyone at the table the chance the current bid, and
+  the bid they're building, is true: **blind** (every die or card unseen) and **with your hand** (counting yours). Dice use exact
+  binomial odds; poker simulates 3000 deals in the browser (`src/shared/odds.ts`); Mia shows the chance a fair
+  roll reaches the announcement, since nobody holds anything when judging it. While it's on, the table says so.
+
 ## Bots
 
-The host can add bots in the lobby (**+ Add bot**, ✕ to remove) and set each one's difficulty. Bots are always ready, count toward the 8-player
+The host can add bots in the lobby (**+ Add bot**, ✕ to remove) and set each one's difficulty, which shows next
+to the bot's name at the table, e.g. "Bot 1 (Hard)". Bots are always ready, count toward the 8-player
 limit, and can't host; a room closes when its last human leaves. On a bot's turn the server waits 1.2–2.4s, then
 plays the move its strategy picks from `viewFor(state, botId)`, the same redacted view a human gets, so bots
 never see hidden dice or cards. Bot strategies are registered per game in `BOTS` in `rooms.ts`.
@@ -105,7 +112,9 @@ Dice and poker bots use the same decision rule:
 2. **Opening:** bid the boldest claim at least that likely to be true (Easy: a random one of those).
 3. **Responding:** take the cheapest legal raise at least that likely, unless calling has better odds
    (1 − P(current bid true)). Dice bots say "spot on" when the exact count is likelier than the bid being false.
-4. **Bluffing:** with the level's bluff chance, when the current bid is only somewhat doubtful (<70% to be false),
+4. **Long shot:** if no raise reaches the threshold but the current bid is likelier true than any raise, make the
+   likeliest raise anyway. Calling a bid the bot's own hand proves is a sure loss.
+5. **Bluffing:** with the level's bluff chance, when the current bid is only somewhat doubtful (<70% to be false),
    raise with the likeliest of the next few claims instead of calling.
 
 ### Difficulty
@@ -127,9 +136,9 @@ Head-to-head, two players (dice: 5 dice, 1000 games; poker: 2 starting cards, 30
 
 | | Dice | Poker |
 |---|---|---|
-| Normal vs Easy | 62% | 79% |
-| Hard vs Normal | 76% | 60% |
-| Hard vs Easy | 82% | 84% |
+| Normal vs Easy | 54% | 59% |
+| Hard vs Normal | 74% | 61% |
+| Hard vs Easy | 76% | 66% |
 
 Known weakness: Easy and Normal treat every unseen die or card as random, so they're easy to bluff. Hard can be
 steered the other way: bid on what you don't hold and it believes you. Players see a short version of this under

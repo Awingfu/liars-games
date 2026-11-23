@@ -1,6 +1,6 @@
 import type { Rng } from '../engine'
 import { BOT_STYLES, NO_SUPPORT_WEIGHT, perceive, random, type BotLevel } from './botStyle'
-import { claimError, compareClaims, type Card, type Claim, type PokerAction, type PokerView, type Suit } from './liarsPoker'
+import { claimError, compareClaims, fullDeck, type Card, type Claim, type PokerAction, type PokerView, type Suit } from './liarsPoker'
 
 const RANKS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 const SUITS: Suit[] = [0, 1, 2, 3]
@@ -28,7 +28,7 @@ interface Pool {
   suit: number[]
 }
 
-function summarize(cards: Card[]): Pool {
+export function summarize(cards: Card[]): Pool {
   const n = new Array(15).fill(0)
   const suit = [0, 0, 0, 0]
   for (const c of cards) {
@@ -59,6 +59,17 @@ export function holds(p: Pool, c: Claim): boolean {
   }
 }
 
+/** Every card not in `mine`, from `decks` decks (with two decks, holding one A♠ leaves the other unseen). */
+export function unseenCards(mine: Card[], decks = 1): Card[] {
+  const left = [...mine]
+  return fullDeck(decks).filter((c) => {
+    const i = left.findIndex((m) => m.rank === c.rank && m.suit === c.suit)
+    if (i < 0) return true
+    left.splice(i, 1)
+    return false
+  })
+}
+
 /** Does this hand hold at least one card the claim is built from? */
 export function supports(hand: Card[], c: Claim): boolean {
   switch (c.type) {
@@ -80,9 +91,7 @@ export function supports(hand: Card[], c: Claim): boolean {
 export function pokerBotAction(view: PokerView, me: string, rng: Rng, level: BotLevel = 'normal'): PokerAction {
   const style = BOT_STYLES[level]
   const mine = view.players.find((p) => p.id === me)?.hand ?? []
-  const unseen: Card[] = []
-  for (const suit of SUITS)
-    for (const rank of RANKS) if (!mine.some((c) => c.rank === rank && c.suit === suit)) unseen.push({ rank, suit })
+  const unseen = unseenCards(mine, view.decks)
   const others = view.players.filter((p) => p.id !== me && p.cardCount > 0)
   const lastClaim = new Map(view.history.map((b) => [b.by, b.claim]))
   const hidden = Math.min(others.reduce((n, p) => n + p.cardCount, 0), unseen.length)
@@ -127,6 +136,9 @@ export function pokerBotAction(view: PokerView, me: string, rng: Rng, level: Bot
   const callScore = 1 - p(0)
   const raise = raises.find((r) => r.p >= nerve)
   if (raise && raise.p >= callScore) return { type: 'bid', claim: raise.claim }
+  // No raise feels safe, but if calling is even worse (the claim is probably true), take the best long shot.
+  const best = raises.reduce<(typeof raises)[number] | null>((a, b) => (!a || b.p > a.p ? b : a), null)
+  if (best && best.p > callScore) return { type: 'bid', claim: best.claim }
   // Sometimes bluff instead of calling a claim that's merely doubtful.
   if (raises.length && callScore < 0.7 && random(rng) < style.bluff) {
     const best = raises.slice(0, 8).reduce((a, b) => (b.p > a.p ? b : a))

@@ -139,7 +139,8 @@ describe('liarsPoker engine', () => {
 
   it('canStart guards deck size and card counts', () => {
     expect(E.canStart(8, { startingCards: 1, maxCards: 6 })).toBeNull()
-    expect(E.canStart(9, { startingCards: 1, maxCards: 6 })).not.toBeNull()
+    expect(E.canStart(9, { startingCards: 1, maxCards: 6 })).toBeNull() // 54 cards: two decks
+    expect(E.canStart(11, { startingCards: 1, maxCards: 10 })).not.toBeNull() // 110 > 104
     expect(E.canStart(4, { startingCards: 3, maxCards: 2 })).not.toBeNull()
   })
 
@@ -200,5 +201,19 @@ describe('liarsPoker engine', () => {
     expect(describeClaim({ type: 'twoPair', high: 13, low: 6 })).toBe('two pair, Ks and 6s')
     expect(describeClaim({ type: 'fullHouse', trips: 14, pair: 10 })).toBe('As full of 10s')
     expect(describeClaim({ type: 'straightFlush', suit: 3, high: 14 })).toBe('royal flush in ♠')
+  })
+})
+
+describe('two decks', () => {
+  it('uses a second deck only when one cannot cover everyone at the max', () => {
+    expect(E.init(['a', 'b', 'c', 'd', 'e'], { startingCards: 1, maxCards: 10 }, rng).decks).toBe(1) // 50 ≤ 52
+    const s = E.init(['a', 'b', 'c', 'd', 'e', 'f'], { startingCards: 10, maxCards: 10 }, rng)
+    expect(s.decks).toBe(2)
+    expect(s.players.flatMap((p) => p.hand)).toHaveLength(60)
+    expect(E.canStart(8, { startingCards: 1, maxCards: 10 })).toBeNull() // 80 ≤ 104
+  })
+
+  it('duplicate cards count toward the same claim', () => {
+    expect(poolHas(cards('As As'), { type: 'pair', rank: 14 })).toBe(true)
   })
 })

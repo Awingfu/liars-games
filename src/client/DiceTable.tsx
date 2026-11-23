@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { isLegalRaise, type Bid, type DiceView, type RoundResult } from '../shared/games/liarsDice'
 import type { RoomView, StateMsg } from '../shared/protocol'
 import type { Run } from './App'
-import { BotTips, Countdown, GameOver, TableHead } from './common'
+import { diceOdds } from '../shared/odds'
+import { BotTips, Countdown, EzNote, GameOver, OddsLine, TableHead, displayName, useEzMode } from './common'
 
 const FACE_CHARS = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
 
@@ -26,7 +27,7 @@ function minRaise(bid: Bid | null, onesWild: boolean, total: number): Bid | null
 
 export function DiceTable({ state, room, run }: { state: StateMsg; room: RoomView; run: Run }) {
   const g = state.game as DiceView
-  const nameOf = (id: string | null) => room.players.find((p) => p.id === id)?.name ?? '?'
+  const nameOf = (id: string | null) => displayName(room, id)
   const me = g.players.find((p) => p.id === state.you)
   const myTurn = g.turnPlayerId === state.you
 
@@ -59,6 +60,7 @@ export function DiceTable({ state, room, run }: { state: StateMsg; room: RoomVie
           <>
             <div className="muted small">{nameOf(g.bid.by)} bids</div>
             <div className="big">{bidText(g.bid)}</div>
+            {g.phase === 'bidding' && <DiceOdds view={g} you={state.you} bid={g.bid} />}
           </>
         ) : g.phase === 'bidding' ? (
           <div className="muted">{myTurn ? 'You open the bidding' : `${nameOf(g.turnPlayerId)} opens the bidding`}</div>
@@ -70,6 +72,7 @@ export function DiceTable({ state, room, run }: { state: StateMsg; room: RoomVie
           </div>
         )}
       </div>
+      {g.phase === 'bidding' && <EzNote />}
 
       {g.lastResult && <Reveal result={g.lastResult} view={g} nameOf={nameOf} you={state.you} deadline={room.deadline} />}
 
@@ -84,7 +87,7 @@ export function DiceTable({ state, room, run }: { state: StateMsg; room: RoomVie
         </div>
       )}
 
-      {myTurn && <BidControls view={g} run={run} />}
+      {myTurn && <BidControls view={g} you={state.you} run={run} />}
 
       {g.history.length > 0 && g.phase === 'bidding' && (
         <details className="history">
@@ -98,7 +101,7 @@ export function DiceTable({ state, room, run }: { state: StateMsg; room: RoomVie
   )
 }
 
-function BidControls({ view: g, run }: { view: DiceView; run: Run }) {
+function BidControls({ view: g, you, run }: { view: DiceView; you: string; run: Run }) {
   const { onesWild } = g.config
   // Depend on primitives: every server update sends a fresh `bid` object.
   const [bq, bf] = [g.bid?.qty, g.bid?.face]
@@ -129,6 +132,7 @@ function BidControls({ view: g, run }: { view: DiceView; run: Run }) {
           </button>
         ))}
       </div>
+      {legal(face) && <DiceOdds view={g} you={you} bid={{ qty, face }} label="Chance your bid is true" />}
       <div className="row actions">
         <button className="primary" disabled={!legal(face)} onClick={() => run({ t: 'game:action', action: { type: 'bid', qty, face } })}>
           Bid {qty} × {FACE_CHARS[face]}
@@ -150,6 +154,14 @@ function BidControls({ view: g, run }: { view: DiceView; run: Run }) {
       )}
     </div>
   )
+}
+
+/** EZ mode odds for a dice bid: blind, and counting your own dice if you're playing. */
+function DiceOdds({ view, you, bid, label }: { view: DiceView; you: string; bid: Bid; label?: string }) {
+  const ez = useEzMode()
+  if (!ez) return null
+  const playing = !!view.players.find((p) => p.id === you)?.dice?.length
+  return <OddsLine label={label} blind={diceOdds(view, you, bid, false)} withHand={playing ? diceOdds(view, you, bid, true) : undefined} />
 }
 
 function Reveal({ result: r, view: g, nameOf, you, deadline }: { result: RoundResult; view: DiceView; nameOf: (id: string) => string; you: string; deadline: number | null }) {

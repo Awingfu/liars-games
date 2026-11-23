@@ -82,6 +82,9 @@ export function diceBotAction(view: DiceView, me: string, rng: Rng, level: BotLe
   const raise = raises.find((b) => pTrue(b) >= nerve)
   if (raise && pTrue(raise) >= callScore) return { type: 'bid', ...raise }
   if (spotOn && pExact(current) > callScore) return { type: 'spotOn' }
+  // No raise feels safe, but if calling is even worse (the bid is probably true), take the best long shot.
+  const best = raises.reduce<Bid | null>((a, b) => (!a || pTrue(b) > pTrue(a) ? b : a), null)
+  if (best && pTrue(best) > callScore) return { type: 'bid', ...best }
   // Sometimes bluff instead of calling a bid that's merely doubtful.
   if (raises.length && callScore < 0.7 && random(rng) < style.bluff) {
     const best = raises.slice(0, 6).reduce((a, b) => (pTrue(b) > pTrue(a) ? b : a))

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { seededRng } from '../engine'
 import { compareClaims, liarsPoker as E, poolHas, type Card, type Claim, type PokerConfig, type PokerView, type Suit } from './liarsPoker'
 import { BOT_LEVELS, type BotLevel } from './botStyle'
-import { ALL_CLAIMS, holds, pokerBotAction, supports } from './liarsPokerBot'
+import { ALL_CLAIMS, holds, pokerBotAction, supports, unseenCards } from './liarsPokerBot'
 
 function cards(s: string): Card[] {
   const suits: Record<string, Suit> = { c: 0, d: 1, h: 2, s: 3 }
@@ -38,7 +38,7 @@ const view = (hand: string, others: number, bid: Claim | null): PokerView => {
   return {
     game: 'poker', phase: 'bidding', round: 1, config: { startingCards: h.length, maxCards: 5 },
     players: [{ id: 'me', cardCount: h.length, hand: h }, { id: 'x', cardCount: others, hand: null }],
-    totalCards: h.length + others, turnPlayerId: 'me',
+    decks: 1, totalCards: h.length + others, turnPlayerId: 'me',
     bid: bid && { claim: bid, by: 'x' }, history: bid ? [{ claim: bid, by: 'x' }] : [], lastResult: null, winnerId: null,
   }
 }
@@ -97,5 +97,21 @@ describe('poker bot', () => {
   it('must call when no higher claim exists', () => {
     const top: Claim = { type: 'straightFlush', suit: 3, high: 14 }
     expect(pokerBotAction(view('As', 1, top), 'me', seededRng(1))).toEqual({ type: 'call' })
+  })
+})
+
+describe('poker bot never calls a claim its own hand proves', () => {
+  it.each(BOT_LEVELS)('%s', (level) => {
+    // Holding the 9 against "9 high", with no safe raise: calling is a sure loss, so it must raise.
+    for (let seed = 1; seed <= 50; seed++)
+      expect(pokerBotAction(view('9c', 1, { type: 'high', rank: 9 }), 'me', seededRng(seed), level).type).toBe('bid')
+  })
+
+  it('with two decks, holding one A♠ leaves the other unseen', () => {
+    const mine = cards('As Kd')
+    expect(unseenCards(mine, 1)).toHaveLength(50)
+    const two = unseenCards(mine, 2)
+    expect(two).toHaveLength(102)
+    expect(two.filter((c) => c.rank === 14 && c.suit === 3)).toHaveLength(1)
   })
 })

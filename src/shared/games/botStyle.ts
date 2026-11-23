@@ -37,8 +37,11 @@ export function perceive<K>(odds: (k: K) => number, key: (k: K) => string, noise
   if (!noise) return odds
   const err = new Map<string, number>()
   return (k: K) => {
+    const p = odds(k)
+    // Even a sloppy bot knows a sure thing (e.g. a claim its own hand proves).
+    if (p <= 0 || p >= 1) return p
     const id = key(k)
     if (!err.has(id)) err.set(id, (random(rng) * 2 - 1) * noise)
-    return Math.max(0, Math.min(1, odds(k) + err.get(id)!))
+    return Math.max(0, Math.min(1, p + err.get(id)!))
   }
 }
