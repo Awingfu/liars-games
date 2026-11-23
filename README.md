@@ -83,7 +83,7 @@ To add another game: implement `GameEngine`, add its config/action schemas to `p
 - **EZ mode.** A lobby setting (off by default) that shows everyone at the table the chance the current bid, and
   the bid they're building, is true: **blind** (every die or card unseen) and **with your hand** (counting yours). Dice use exact
   binomial odds; poker simulates 3000 deals in the browser (`src/shared/odds.ts`); Mia shows the chance a fair
-  roll reaches the announcement, since nobody holds anything when judging it. While it's on, the table says so.
+  roll reaches the announcement, since nobody holds anything when judging it. While it's on, the table header says so.
 
 ## Bots
 

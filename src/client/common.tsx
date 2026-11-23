@@ -112,9 +112,13 @@ export function Scoreboard({ scores, you }: { scores: ScoreView[]; you: string }
 /** Top line of a game table: status text, a watching badge for spectators, and Leave. */
 export function TableHead({ children, room, you, run }: { children: ReactNode; room: RoomView; you: string; run: Run }) {
   const watching = room.players.find((p) => p.id === you)?.spectator
+  const ez = useEzMode()
   return (
     <div className="table-head">
-      <span>{children}</span>
+      <span>
+        {children}
+        {ez && <> · <span title="Everyone sees the odds that bids are true">EZ mode</span></>}
+      </span>
       <span className="row">
         {watching && <span className="watching-badge">Watching · you'll play next game</span>}
         <button
@@ -154,11 +158,6 @@ export function displayName(room: RoomView, id: string | null): string {
 /** Whether the room has EZ mode on (a lobby setting, the same for everyone). Provided by App around the table. */
 export const EzContext = createContext(false)
 export const useEzMode = () => useContext(EzContext)
-
-/** Shown at the table while EZ mode is on, so nobody's surprised everyone can see the odds. */
-export function EzNote() {
-  return useEzMode() ? <p className="ez-note">EZ mode is on: everyone sees the odds</p> : null
-}
 
 /** "Chance it's true: blind 34% · with your hand 61%". Omit `withHand` when you hold nothing relevant. */
 export function OddsLine({ label = "Chance it's true", blind, withHand }: { label?: string; blind: number; withHand?: number }) {

@@ -3,7 +3,7 @@ import { MIA, MIA_VALUES, describeMia, miaDice, miaRank, nextAbove, type MiaActi
 import type { RoomView, StateMsg } from '../shared/protocol'
 import type { Run } from './App'
 import { miaOdds } from '../shared/odds'
-import { BotTips, Countdown, EzNote, GameOver, OddsLine, TableHead, displayName, useEzMode } from './common'
+import { BotTips, Countdown, GameOver, OddsLine, TableHead, displayName, useEzMode } from './common'
 
 const FACE_CHARS = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
 
@@ -72,7 +72,6 @@ export function MiaTable({ state, room, run }: { state: StateMsg; room: RoomView
           </div>
         )}
       </div>
-      {g.phase === 'bidding' && <EzNote />}
 
       {g.lastResult && <Reveal result={g.lastResult} phase={g.phase} nameOf={nameOf} you={state.you} deadline={room.deadline} />}
 

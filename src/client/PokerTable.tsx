@@ -15,7 +15,7 @@ import {
 import type { RoomView, StateMsg } from '../shared/protocol'
 import type { Run } from './App'
 import { pokerOdds } from '../shared/odds'
-import { BotTips, Countdown, EzNote, GameOver, OddsLine, TableHead, displayName, useEzMode } from './common'
+import { BotTips, Countdown, GameOver, OddsLine, TableHead, displayName, useEzMode } from './common'
 
 const RANKS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 const ALL_SUITS: Suit[] = [0, 1, 2, 3]
@@ -142,7 +142,6 @@ export function PokerTable({ state, room, run }: { state: StateMsg; room: RoomVi
           </div>
         )}
       </div>
-      {g.phase === 'bidding' && <EzNote />}
 
       {g.lastResult && <Reveal result={g.lastResult} view={g} nameOf={nameOf} you={state.you} deadline={room.deadline} />}
 

@@ -166,7 +166,6 @@ button.danger { background: var(--danger); border-color: var(--danger); font-wei
 @media (max-width: 480px) { .mia-values { grid-template-columns: repeat(5, 1fr); } }
 
 /* EZ mode */
-.ez-note { text-align: center; font-size: 0.85rem; color: var(--muted); margin: -6px 0 14px; }
 .odds { margin-top: 8px; font-size: 0.85rem; color: var(--muted); text-align: center; }
 .odds strong { color: var(--text); font-variant-numeric: tabular-nums; }
 .controls .odds { margin: 0 0 12px; }
