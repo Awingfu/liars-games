@@ -138,9 +138,9 @@ function BidControls({ view: g, you, run }: { view: DiceView; you: string; run: 
         </button>
         {g.bid && (
           <>
-            <button className="danger" aria-label="Liar!" title="The bid is too high: everyone reveals; if it's wrong the bidder loses a die, otherwise you do" onClick={() => run({ t: 'game:action', action: { type: 'call' } })}>Liar!</button>
+            <button className="danger" aria-label="Liar!" title="The bid is too high. If you're right the bidder loses a die; if not, you do" onClick={() => run({ t: 'game:action', action: { type: 'call' } })}>Liar!</button>
             {g.config.spotOn && (
-              <button aria-label="Spot on" title="The bid is exactly right: get a die back if so, lose one if not" onClick={() => run({ t: 'game:action', action: { type: 'spotOn' } })}>Spot on</button>
+              <button aria-label="Spot on" title="The bid is exactly right. Get a die back if so, lose one if not" onClick={() => run({ t: 'game:action', action: { type: 'spotOn' } })}>Spot on</button>
             )}
           </>
         )}
@@ -175,7 +175,7 @@ function Reveal({ result: r, view: g, nameOf, you, deadline }: { result: RoundRe
   return (
     <div className="card reveal">
       <p>
-        <strong>{who(r.callerId)}</strong> {call} on {nameOf(r.bid.by)}'s <strong>{bidText(r.bid)}</strong> — there{' '}
+        <strong>{who(r.callerId)}</strong> {call} on {nameOf(r.bid.by)}'s <strong>{bidText(r.bid)}</strong>. There{' '}
         {r.actualCount === 1 ? 'was' : 'were'} <strong>{r.actualCount}</strong>. {outcome}
       </p>
       <ul className="hands">

@@ -215,10 +215,10 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
               <TimerSelect value={room.settings.turnSeconds} onChange={(turnSeconds) => update({ turnSeconds })} />
               <div className="option">
                 <p className="hint flush">
-                  Roll two dice in secret and announce a result that beats the last one, truthfully or not. The next
-                  player believes you and rolls to beat it, or calls Liar. Wrong side loses a life. Ranking, low to
-                  high: 31, 32, 41 … 65, then pairs 1-1 … 6-6, then Mia (2-1). Against Mia you can give up (lose 1)
-                  or call, but calling a real Mia costs 2.
+                  Roll two dice in secret and announce something higher than the last announcement, true or not.
+                  The next player believes it and rolls to beat it, or calls Liar. Whoever's wrong loses a life.
+                  Low to high: 31, 32, 41 … 65, then pairs 1-1 … 6-6, then Mia (2-1). Against Mia you can give up
+                  (lose 1) or call, but calling a real Mia costs 2.
                 </p>
               </div>
             </>
@@ -240,9 +240,9 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
                   1s are wild
                 </label>
                 <p className="hint">
-                  1s count toward every bid, so "five 4s" counts all 4s <em>and</em> all 1s. The only exception is a bid
-                  on 1s themselves, which counts just the 1s. You can't open on 1s. Switching to 1s needs at least half
-                  the current quantity (rounded up), e.g. 6×4s → 3×1s. Switching back needs double plus one, e.g. 3×1s → 7×anything.
+                  1s count toward every bid, so "five 4s" counts all 4s <em>and</em> 1s. A bid on 1s counts only 1s.
+                  You can't open on 1s. Switching to 1s needs at least half the quantity, rounded up (6×4s → 3×1s);
+                  switching back needs double plus one (3×1s → 7×anything).
                 </p>
               </div>
               <div className="option">
@@ -251,9 +251,8 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
                   Allow "spot on" calls
                 </label>
                 <p className="hint">
-                  On your turn, instead of calling Liar, you can claim the current bid is <em>exactly</em> right. If the
-                  count matches exactly, you get a die back (up to the starting number). If it's off in either direction,
-                  you lose a die.
+                  Instead of calling Liar, claim the current bid is <em>exactly</em> right. If it is, you get a die back
+                  (up to the starting number). If not, you lose one.
                 </p>
               </div>
             </>
@@ -285,8 +284,8 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
                 <div className="option">
                   <p className="hint flush two-decks-note">
                     🂠🂠 <strong>2 decks in play.</strong> {seated.length} players × up to {poker.maxCards} cards ={' '}
-                    {seated.length * poker.maxCards}, more than one deck's 52, so two decks are shuffled together.
-                    Duplicate cards like two A♠ can turn up, and they count: two A♠ make a pair of aces.
+                    {seated.length * poker.maxCards}, more than 52, so two decks are shuffled together. Duplicates
+                    like two A♠ can turn up and they count: two A♠ make a pair of aces.
                   </p>
                 </div>
               )}
@@ -297,7 +296,7 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
               <input type="checkbox" checked={room.settings.shuffleSeats} onChange={(e) => update({ shuffleSeats: e.target.checked })} />
               Shuffle seating order
             </label>
-            <p className="hint">Randomize who sits next to whom when the game starts, instead of using join order.</p>
+            <p className="hint">Randomize seats at the start instead of using join order.</p>
           </div>
           <div className="option">
             <label className="check">
@@ -306,8 +305,8 @@ function Lobby({ state, room, run }: { state: StateMsg; room: RoomView; run: Run
             </label>
             <p className="hint">
               {room.settings.game === 'mia'
-                ? 'Everyone sees the chance a fair roll reaches the current announcement, and the one they are about to make.'
-                : 'Everyone sees the chance the current bid, and the bid they are building, is true: blind (every die or card unseen) and with their own hand.'}
+                ? "Everyone sees the chance a fair roll reaches the current announcement and the one they're about to make."
+                : "Everyone sees how likely the current bid and the one they're building are to be true, both blind and counting their own hand."}
             </p>
           </div>
         </fieldset>

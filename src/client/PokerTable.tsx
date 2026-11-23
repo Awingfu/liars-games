@@ -255,7 +255,7 @@ function Reveal({ result: r, view: g, nameOf, you, deadline }: { result: PokerRo
   return (
     <div className="card reveal">
       <p>
-        <strong>{who(r.callerId)}</strong> called Liar on {nameOf(r.bid.by)}'s <strong>{describeClaim(r.bid.claim)}</strong> — it{' '}
+        <strong>{who(r.callerId)}</strong> called Liar on {nameOf(r.bid.by)}'s <strong>{describeClaim(r.bid.claim)}</strong>. It{' '}
         <strong>{r.existed ? 'was there' : "wasn't there"}</strong>. {outcome}
       </p>
       <ul className="hands">

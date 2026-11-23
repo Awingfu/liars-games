@@ -44,10 +44,10 @@ src/client/                     React UI (Home → Lobby → Table)
 - **Server-authoritative.** Clients send intents (`game:action`); the server validates with the engine.
 - **Hidden info never leaves the server.** Every outbound game state goes through `engine.viewFor(state, playerId)`,
   which only includes the viewer's own dice. All hands are revealed only via `lastResult` after a call.
-- **Full snapshots.** Each change sends every player their personalized `state` — tiny payloads, no desync.
+- **Full snapshots.** Each change sends every player their personalized `state`. Payloads are tiny and clients can't drift.
 - **Reconnect.** The server issues a session token (kept in `sessionStorage`); reconnecting with it restores your seat.
-  Lost the tab entirely (new device, browser killed it)? Join again with the same name: a disconnected seat with
-  that name is handed back, hand and all. Names held by connected players are refused.
+  If the tab is gone (new device, browser killed it), joining again with the same name hands back the disconnected
+  seat, hand and all. Names held by connected players are refused.
 - **Timers live on the server.** Turn timeout auto-plays (`timeoutAction`: open with 1×2 or call). If the room has no
   timer, a disconnected player still gets 60s. Abandoned rooms are removed after 10 minutes.
 
@@ -79,11 +79,10 @@ To add another game: implement `GameEngine`, add its config/action schemas to `p
 - **Scoreboard.** Each room keeps wins and games played per player (bots included) for as long as it exists,
   shown in the lobby and on the game-over card. A game counts once when it ends, for everyone seated at the start,
   including players who forfeited.
-
-- **EZ mode.** A lobby setting (off by default) that shows everyone at the table the chance the current bid, and
-  the bid they're building, is true: **blind** (every die or card unseen) and **with your hand** (counting yours). Dice use exact
-  binomial odds; poker simulates 3000 deals in the browser (`src/shared/odds.ts`); Mia shows the chance a fair
-  roll reaches the announcement, since nobody holds anything when judging it. While it's on, the table header says so.
+- **EZ mode.** A lobby setting, off by default. Everyone at the table sees how likely the current bid and the one
+  they're building are to be true, **blind** (every die or card unseen) and **with your hand**. Dice use exact
+  binomial odds; poker simulates 3000 deals in the browser (`src/shared/odds.ts`). Mia shows the chance a fair roll
+  reaches the announcement, since nobody holds anything when judging it. The table header shows when it's on.
 
 ## Bots
 
